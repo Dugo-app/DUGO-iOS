@@ -11,12 +11,31 @@ import SwiftUI
 struct HomeView: View {
     // MARK: - Properties
 
+    @Query(sort: \WishItem.createdAt, order: .reverse) private var syncedItems: [WishItem]
     @ObservedObject private var viewModel: HomeViewModel
     private let reminders: ReminderManager
     private let cloudSyncConfigured: Bool
     private let onAddTapped: () -> Void
     private let scrollToTopRequest: Int
     @State private var openingMessage: String
+
+    private var keptItems: [WishItem] {
+        syncedItems.filter { $0.status == .keeping }
+    }
+
+    private var filteredItems: [WishItem] {
+        let query = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return keptItems.filter { item in
+            (viewModel.selectedCategory == nil || item.categoryRaw == viewModel.selectedCategory)
+                && (query.isEmpty || item.title.localizedCaseInsensitiveContains(query)
+                    || item.reason.localizedCaseInsensitiveContains(query))
+        }
+    }
+
+    private var reviewItems: [WishItem] {
+        keptItems.filter { $0.reviewAt.map { $0 <= .now } ?? false }
+            .sorted { ($0.reviewAt ?? .distantFuture) < ($1.reviewAt ?? .distantFuture) }
+    }
 
     // MARK: - Initializer
 
@@ -51,7 +70,7 @@ struct HomeView: View {
                             .background(DuGoTheme.surface, in: RoundedRectangle(cornerRadius: 18))
                     }
 
-                    if !viewModel.reviewItems.isEmpty {
+                    if !reviewItems.isEmpty {
                         reviewSection
                     }
 
@@ -121,7 +140,7 @@ struct HomeView: View {
                 .applyDuGoFont(.body14Regular)
                 .foregroundStyle(DuGoTheme.secondary)
 
-            ReviewCarouselView(items: viewModel.reviewItems, viewModel: viewModel)
+            ReviewCarouselView(items: reviewItems, viewModel: viewModel)
         }
     }
 
@@ -132,7 +151,7 @@ struct HomeView: View {
                     .applyDuGoFont(.body14Regular)
                     .foregroundStyle(DuGoTheme.secondary)
 
-                Text("\(viewModel.keptItems.count)")
+                Text("\(keptItems.count)")
                     .applyDuGoFont(.body14Medium)
                     .foregroundStyle(DuGoTheme.accent)
 
@@ -143,7 +162,7 @@ struct HomeView: View {
 
             categories
 
-            if viewModel.keptItems.isEmpty {
+            if keptItems.isEmpty {
                 emptyCollection(
                     title: "마음을 담아보세요",
                     message: "사고 싶은 물건의 링크만 있어도 괜찮아요",
@@ -151,7 +170,7 @@ struct HomeView: View {
                 ) {
                     onAddTapped()
                 }
-            } else if viewModel.filteredItems.isEmpty {
+            } else if filteredItems.isEmpty {
                 emptyCollection(
                     title: "찾는 마음이 없어요",
                     message: "다른 검색어나 카테고리로 살펴보세요",
@@ -165,11 +184,17 @@ struct HomeView: View {
                     horizontalSpacing: 12,
                     verticalSpacing: 16
                 ) {
-                    ForEach(viewModel.filteredItems) { item in
+                    ForEach(filteredItems) { item in
                         NavigationLink {
                             WishDetailView(item: item, viewModel: viewModel)
                         } label: {
-                            WishCardView(item: item)
+                            WishCardView(
+                                item: item,
+                                title: item.title,
+                                price: item.price,
+                                categoryRaw: item.categoryRaw,
+                                storedDescription: item.storedDescription
+                            )
                         }
                         .buttonStyle(.plain)
                     }
