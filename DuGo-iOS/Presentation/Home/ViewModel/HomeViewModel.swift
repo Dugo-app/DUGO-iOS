@@ -11,6 +11,19 @@ import SwiftData
 
 @MainActor
 final class HomeViewModel: ObservableObject {
+    // MARK: - Types
+
+    struct DecisionUndoToken {
+        let itemID: UUID
+        let recordID: UUID
+        fileprivate let previousStatusRaw: String
+        fileprivate let previousReviewAt: Date?
+        fileprivate let previousWantsReminder: Bool
+        fileprivate let appliedStatusRaw: String
+        fileprivate let appliedReviewAt: Date?
+        fileprivate let appliedWantsReminder: Bool
+    }
+
     // MARK: - Properties
 
     @Published var searchText = ""
@@ -175,15 +188,20 @@ final class HomeViewModel: ObservableObject {
         note: String,
         nextDate: Date? = nil,
         notify: Bool = false
-    ) async -> Bool {
-        guard !isWorking else { return false }
+    ) async -> DecisionUndoToken? {
+        guard !isWorking else { return nil }
         isWorking = true
         errorMessage = nil
         defer { isWorking = false }
         if let nextDate, decision == .wait, nextDate <= .now {
             errorMessage = DraftError.pastDate.errorDescription
-            return false
+            return nil
         }
+
+        let previousStatusRaw = item.statusRaw
+        let previousReviewAt = item.reviewAt
+        let previousWantsReminder = item.wantsReminder
+
         switch decision {
         case .purchase: item.statusRaw = WishStatus.purchased.rawValue
         case .release: item.statusRaw = WishStatus.released.rawValue
@@ -191,14 +209,64 @@ final class HomeViewModel: ObservableObject {
         }
         item.reviewAt = decision == .wait ? nextDate : nil
         item.wantsReminder = decision == .wait && nextDate != nil && notify
-        context.insert(
-            DecisionRecord(
-                item: item,
-                decision: decision,
-                feeling: feeling,
-                note: note.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+
+        let record = DecisionRecord(
+            item: item,
+            decision: decision,
+            feeling: feeling,
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines)
         )
+        context.insert(record)
+        let undoToken = DecisionUndoToken(
+            itemID: item.id,
+            recordID: record.id,
+            previousStatusRaw: previousStatusRaw,
+            previousReviewAt: previousReviewAt,
+            previousWantsReminder: previousWantsReminder,
+            appliedStatusRaw: item.statusRaw,
+            appliedReviewAt: item.reviewAt,
+            appliedWantsReminder: item.wantsReminder
+        )
+
+        do {
+            try context.save()
+            reload()
+            if item.wantsReminder {
+                await reminders.requestPermissionIfNeeded()
+            }
+            await syncReminders()
+            return undoToken
+        } catch {
+            context.rollback()
+            errorMessage = "선택을 저장하지 못했어요 다시 시도해주세요"
+            return nil
+        }
+    }
+
+    func undoDecision(_ token: DecisionUndoToken) async -> Bool {
+        guard !isWorking else { return false }
+        isWorking = true
+        errorMessage = nil
+        defer { isWorking = false }
+
+        reload()
+        guard
+            let item = items.first(where: { $0.id == token.itemID }),
+            let record = records.first(where: { $0.itemID == token.itemID }),
+            record.id == token.recordID,
+            item.statusRaw == token.appliedStatusRaw,
+            item.reviewAt == token.appliedReviewAt,
+            item.wantsReminder == token.appliedWantsReminder
+        else {
+            errorMessage = "선택이 변경됐어요 기록을 다시 확인해주세요"
+            return false
+        }
+
+        item.statusRaw = token.previousStatusRaw
+        item.reviewAt = token.previousReviewAt
+        item.wantsReminder = token.previousWantsReminder
+        context.delete(record)
+
         do {
             try context.save()
             reload()
@@ -209,7 +277,8 @@ final class HomeViewModel: ObservableObject {
             return true
         } catch {
             context.rollback()
-            errorMessage = "선택을 저장하지 못했어요 다시 시도해주세요"
+            reload()
+            errorMessage = "선택을 되돌리지 못했어요 다시 시도해주세요"
             return false
         }
     }

@@ -28,6 +28,7 @@ struct ReviewView: View {
         ) ?? .now
     @State private var wantsReminder = false
     @State private var completed: WishDecision?
+    @State private var undoToken: HomeViewModel.DecisionUndoToken?
     @State private var showsWaitSheet = false
     @State private var showsPurchaseConfirmation = false
     @State private var showsReleaseConfirmation = false
@@ -426,14 +427,21 @@ struct ReviewView: View {
 
             Spacer()
 
-            DuGoPrimaryButton(title: "완료") {
+            DuGoSheetActions(
+                primaryTitle: "완료",
+                isLoading: viewModel.isWorking,
+                secondaryTitle: undoToken == nil ? nil : "선택 되돌리기"
+            ) {
                 dismiss()
+            } secondaryAction: {
+                undoSelection()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 16)
         .padding(.top, 48)
         .padding(.bottom, 8)
+        .dugoErrorToast(message: $viewModel.errorMessage)
     }
 
     private func sectionTitle(_ title: String) -> some View {
@@ -510,7 +518,7 @@ struct ReviewView: View {
         let scheduledDate = decision == .wait && schedulesNextReview ? nextDate : nil
 
         Task {
-            if await viewModel.decide(
+            if let undoToken = await viewModel.decide(
                 item,
                 decision: decision,
                 feeling: "",
@@ -518,10 +526,25 @@ struct ReviewView: View {
                 nextDate: scheduledDate,
                 notify: scheduledDate != nil && wantsReminder
             ) {
+                self.undoToken = undoToken
                 pendingCompletion = decision
                 showsPurchaseConfirmation = false
                 showsWaitSheet = false
                 showsReleaseConfirmation = false
+            }
+        }
+    }
+
+    private func undoSelection() {
+        guard let undoToken else { return }
+
+        Task {
+            if await viewModel.undoDecision(undoToken) {
+                self.undoToken = nil
+                pendingCompletion = nil
+                completed = nil
+                decision = nil
+                showsSelectionFooter = false
             }
         }
     }
