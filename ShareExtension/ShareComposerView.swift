@@ -200,6 +200,8 @@ final class ShareComposerModel: ObservableObject {
             imageData: imageData
         )
         try SharedLinkInbox.enqueue(wish)
+        guard wish.wantsReminder == true else { return nil }
+
         let pendingReminders = SharedLinkInbox.pending().compactMap { pending -> WishReminder? in
             guard pending.wantsReminder == true, let date = pending.reviewAt else { return nil }
             return WishReminder(itemID: pending.id, title: pending.title, date: date)
