@@ -427,10 +427,7 @@ struct WishEditorView: View {
     private var toolbarContent: some ToolbarContent {
         if let onCancel {
             ToolbarItem(placement: .topBarLeading) {
-                Button(action: onCancel) {
-                    Text("취소")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
+                Button("취소", action: onCancel)
                 .tint(.duGoInk)
             }
         }
@@ -449,7 +446,6 @@ struct WishEditorView: View {
             } label: {
                 Text("저장")
                     .opacity(viewModel.isWorking || isSaving ? 0 : 1)
-                    .frame(minWidth: 44, minHeight: 44)
                     .overlay {
                         if viewModel.isWorking || isSaving {
                             ProgressView()
