@@ -71,6 +71,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B20000000000000000000001 /* AppURLs.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppURLs.xcconfig; sourceTree = "<group>"; };
 		B10A00000000000000000001 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10A00000000000000000002 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		B10A00000000000000000003 /* ShareComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareComposerView.swift; sourceTree = "<group>"; };
@@ -123,6 +124,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B20000000000000000000002 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000001 /* AppURLs.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
 		B10A00000000000000000022 /* ShareExtension */ = {
 			isa = PBXGroup;
 			children = (
@@ -200,6 +209,7 @@
 		E3EB0B27305D80860017CC71 = {
 			isa = PBXGroup;
 			children = (
+				B20000000000000000000002 /* Config */,
 				E3EB0B32305D80860017CC71 /* DuGo-iOS */,
 				B10A00000000000000000022 /* ShareExtension */,
 				B11000000000000000000001 /* Shared */,
@@ -513,6 +523,7 @@
 		};
 		B10D00000000000000000002 /* Development */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B20000000000000000000001 /* AppURLs.xcconfig */;
 			buildSettings = {
 				APNS_ENVIRONMENT = development;
 				APP_DISPLAY_NAME = "두고dev";
@@ -708,6 +719,7 @@
 		};
 		E3EB0B3C305D80870017CC71 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B20000000000000000000001 /* AppURLs.xcconfig */;
 			buildSettings = {
 				APNS_ENVIRONMENT = development;
 				APP_DISPLAY_NAME = "두고";
@@ -754,6 +766,7 @@
 		};
 		E3EB0B3D305D80870017CC71 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B20000000000000000000001 /* AppURLs.xcconfig */;
 			buildSettings = {
 				APNS_ENVIRONMENT = production;
 				APP_DISPLAY_NAME = "두고";

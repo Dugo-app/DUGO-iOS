@@ -33,6 +33,8 @@ xcuserdata/
 *.provisionprofile
 Secrets.xcconfig
 *.secrets.xcconfig
+DuGo-iOS/GoogleService-Info.plist
+DuGo-iOS/GoogleService-Info-Dev.plist
 *firebase-adminsdk*.json
 *service-account*.json
 *serviceAccount*.json

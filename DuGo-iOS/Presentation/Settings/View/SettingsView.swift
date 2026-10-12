@@ -32,15 +32,6 @@ struct SettingsView: View {
         }
     }
 
-    private enum SettingsURL {
-        static let shareHelp = URL(
-            string: "https://hail-anger-c0a.notion.site/3f6d2ca4eb7c8061ba15f28fa6c86853"
-        )!
-        static let privacyPolicy = URL(
-            string: "https://hail-anger-c0a.notion.site/3eed2ca4eb7c8052a25cefcbbb9cf116?pvs=74"
-        )!
-    }
-
     // MARK: - Properties
 
     @ObservedObject private var viewModel: HomeViewModel
@@ -169,7 +160,7 @@ struct SettingsView: View {
                 NavigationLink {
                     WebDocumentView(
                         title: "공유하기로 마음 담기",
-                        url: SettingsURL.shareHelp
+                        url: AppEnvironment.shareHelpURL
                     )
                 } label: {
                     settingsRow(
@@ -250,7 +241,7 @@ struct SettingsView: View {
                 NavigationLink {
                     WebDocumentView(
                         title: "개인정보 처리방침",
-                        url: SettingsURL.privacyPolicy
+                        url: AppEnvironment.privacyPolicyURL
                     )
                 } label: {
                     settingsRow(
