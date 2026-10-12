@@ -104,6 +104,7 @@ struct CategoryManagementView: View {
         .scrollDismissesKeyboard(.interactively)
         .dismissKeyboardOnBackgroundTap()
         .dugoScreen()
+        .dugoErrorToast(message: $viewModel.errorMessage)
         .dugoConfirmationAlert(
             title: "카테고리를 삭제할까요?",
             message: "이 카테고리에 담긴 상품은 모두 미분류로 이동해요 삭제한 카테고리는 되돌릴 수 없어요",

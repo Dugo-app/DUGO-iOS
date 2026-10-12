@@ -16,6 +16,7 @@ struct DuGo_iOSApp: App {
 
     @StateObject private var reminders: ReminderManager
     private let container: ModelContainer?
+    private let cloudSyncConfigured: Bool
 
     // MARK: - Initializer
 
@@ -25,26 +26,64 @@ struct DuGo_iOSApp: App {
         let manager = ReminderManager()
         manager.start()
         _reminders = StateObject(wrappedValue: manager)
-        do {
-            let schema = Schema([WishItem.self, DecisionRecord.self])
-            let appSupport = FileManager.default.urls(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask
-            )[0]
-            let storeURL = appSupport.appendingPathComponent("DoGo.store")
-            let configuration = ModelConfiguration(
-                "DoGo",
-                schema: schema,
-                url: storeURL,
-                cloudKitDatabase: .none
-            )
-            container = try ModelContainer(for: schema, configurations: configuration)
-        } catch {
-            Logger(subsystem: "app.seungwon.dugo", category: "storage").error(
-                "Storage initialization failed: \(error.localizedDescription)"
-            )
-            container = nil
+        let schema = Schema([WishItem.self, DecisionRecord.self, CategoryEntry.self])
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0]
+        let storeURL = appSupport.appendingPathComponent("DoGo.store")
+        let logger = Logger(subsystem: "app.seungwon.dugo", category: "storage")
+        var resolvedContainer: ModelContainer?
+        var isCloudConfigured = false
+
+        if let identifier = CloudSyncConfiguration.containerIdentifier {
+            do {
+                #if DEBUG
+                do {
+                    try CloudKitSchemaInitializer.initializeIfNeeded(
+                        storeURL: storeURL,
+                        containerIdentifier: identifier
+                    )
+                } catch {
+                    logger.error("CloudKit schema initialization failed: \(error.localizedDescription)")
+                }
+                #endif
+
+                let configuration = ModelConfiguration(
+                    "DoGo",
+                    schema: schema,
+                    url: storeURL,
+                    cloudKitDatabase: .private(identifier)
+                )
+                resolvedContainer = try ModelContainer(
+                    for: schema,
+                    configurations: configuration
+                )
+                isCloudConfigured = true
+            } catch {
+                logger.error("Cloud storage initialization failed: \(error.localizedDescription)")
+            }
         }
+
+        if resolvedContainer == nil {
+            do {
+                let configuration = ModelConfiguration(
+                    "DoGo",
+                    schema: schema,
+                    url: storeURL,
+                    cloudKitDatabase: .none
+                )
+                resolvedContainer = try ModelContainer(
+                    for: schema,
+                    configurations: configuration
+                )
+            } catch {
+                logger.error("Local storage initialization failed: \(error.localizedDescription)")
+            }
+        }
+
+        container = resolvedContainer
+        cloudSyncConfigured = isCloudConfigured
     }
 
     // MARK: - Body
@@ -55,7 +94,11 @@ struct DuGo_iOSApp: App {
                 SplashContainer {
                     OnboardingContainer {
                         if let container {
-                            ContentView(context: container.mainContext, reminders: reminders)
+                            ContentView(
+                                context: container.mainContext,
+                                reminders: reminders,
+                                cloudSyncConfigured: cloudSyncConfigured
+                            )
                                 .modelContainer(container)
                         } else {
                             ContentUnavailableView(

@@ -32,21 +32,13 @@ struct SettingsView: View {
         }
     }
 
-    private enum SettingsURL {
-        static let shareHelp = URL(
-            string: "https://hail-anger-c0a.notion.site/3f6d2ca4eb7c8061ba15f28fa6c86853"
-        )!
-        static let privacyPolicy = URL(
-            string: "https://hail-anger-c0a.notion.site/3eed2ca4eb7c8052a25cefcbbb9cf116?pvs=74"
-        )!
-    }
-
     // MARK: - Properties
 
     @ObservedObject private var viewModel: HomeViewModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @StateObject private var versionMonitor = AppVersionMonitor()
+    @StateObject private var cloudSyncMonitor: CloudSyncMonitor
     @State private var notificationAuthorizationStatus: UNAuthorizationStatus?
     @State private var isShowingOnboarding = false
     @State private var isCheckingForUpdate = false
@@ -57,10 +49,14 @@ struct SettingsView: View {
 
     init(
         viewModel: HomeViewModel,
-        reminders: ReminderManager
+        reminders: ReminderManager,
+        cloudSyncConfigured: Bool
     ) {
         self.viewModel = viewModel
         self.reminders = reminders
+        _cloudSyncMonitor = StateObject(
+            wrappedValue: CloudSyncMonitor(isConfigured: cloudSyncConfigured)
+        )
     }
 
     // MARK: - Body
@@ -69,6 +65,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 managementSection
+
+                dataSection
 
                 permissionSection
 
@@ -89,11 +87,13 @@ struct SettingsView: View {
         .dugoScreen()
         .task {
             await refreshNotificationAuthorizationStatus()
+            await cloudSyncMonitor.refresh()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
                 await refreshNotificationAuthorizationStatus()
+                await cloudSyncMonitor.refresh()
             }
         }
         .fullScreenCover(isPresented: $isShowingOnboarding) {
@@ -137,13 +137,30 @@ struct SettingsView: View {
         }
     }
 
+    private var dataSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            settingsSection(title: "데이터") {
+                settingsRow(
+                    title: "iCloud 동기화",
+                    systemImage: "icloud",
+                    trailingText: cloudSyncMonitor.status.title
+                )
+            }
+
+            Text(cloudSyncMonitor.status.description)
+                .applyDuGoFont(.caption12Regular)
+                .foregroundStyle(DuGoTheme.secondary)
+                .padding(.horizontal, 4)
+        }
+    }
+
     private var helpSection: some View {
         settingsSection(title: "도움말") {
             VStack(spacing: 0) {
                 NavigationLink {
                     WebDocumentView(
                         title: "공유하기로 마음 담기",
-                        url: SettingsURL.shareHelp
+                        url: AppEnvironment.shareHelpURL
                     )
                 } label: {
                     settingsRow(
@@ -224,7 +241,7 @@ struct SettingsView: View {
                 NavigationLink {
                     WebDocumentView(
                         title: "개인정보 처리방침",
-                        url: SettingsURL.privacyPolicy
+                        url: AppEnvironment.privacyPolicyURL
                     )
                 } label: {
                     settingsRow(

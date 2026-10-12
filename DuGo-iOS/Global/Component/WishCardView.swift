@@ -87,6 +87,10 @@ struct WishCardView: View {
     // MARK: - Properties
 
     let item: WishItem
+    let title: String
+    let price: Int?
+    let categoryRaw: String
+    let storedDescription: String
 
     // MARK: - Body
 
@@ -96,14 +100,14 @@ struct WishCardView: View {
                 FitWishImage(item: item)
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(item.title)
+                    Text(title)
                         .applyDuGoFont(.body14Medium)
                         .foregroundStyle(DuGoTheme.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    if let price = item.price {
+                    if let price {
                         Text(price.dugoFormattedPrice)
                             .applyDuGoFont(.body14Regular)
                             .foregroundStyle(DuGoTheme.ink)
@@ -118,7 +122,7 @@ struct WishCardView: View {
             .dugoRoundedSurface(cornerRadius: 12)
             .contentShape(RoundedRectangle(cornerRadius: 12))
 
-            Text("\(item.categoryRaw) · \(item.storedDescription) ")
+            Text("\(categoryRaw) · \(storedDescription) ")
                 .applyDuGoFont(.caption12Regular)
                 .foregroundStyle(DuGoTheme.secondary)
                 .padding(.leading, 4)
