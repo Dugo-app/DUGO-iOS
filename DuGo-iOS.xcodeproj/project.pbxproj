@@ -32,6 +32,18 @@
 		B11000000000000000000017 /* OliveYoungLinkAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10B00000000000000000003 /* OliveYoungLinkAdapter.swift */; };
 		B11000000000000000000018 /* ReminderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10F00000000000000000004 /* ReminderManager.swift */; };
 		B11000000000000000000019 /* View+Keyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10C00000000000000000001 /* View+Keyboard.swift */; };
+		B11100000000000000000010 /* DuGoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000001 /* DuGoTheme.swift */; };
+		B11100000000000000000011 /* DuGoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000001 /* DuGoTheme.swift */; };
+		B11100000000000000000012 /* DuGoFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000002 /* DuGoFont.swift */; };
+		B11100000000000000000013 /* DuGoFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000002 /* DuGoFont.swift */; };
+		B11100000000000000000020 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000003 /* Colors.xcassets */; };
+		B11100000000000000000021 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000003 /* Colors.xcassets */; };
+		B11100000000000000000022 /* Pretendard-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000004 /* Pretendard-Regular.otf */; };
+		B11100000000000000000023 /* Pretendard-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000004 /* Pretendard-Regular.otf */; };
+		B11100000000000000000024 /* Pretendard-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000005 /* Pretendard-Medium.otf */; };
+		B11100000000000000000025 /* Pretendard-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000005 /* Pretendard-Medium.otf */; };
+		B11100000000000000000026 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000006 /* Pretendard-SemiBold.otf */; };
+		B11100000000000000000027 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000006 /* Pretendard-SemiBold.otf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,16 +76,22 @@
 		B10A00000000000000000003 /* ShareComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareComposerView.swift; sourceTree = "<group>"; };
 		B10A00000000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10A00000000000000000005 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
-		B10A00000000000000000006 /* SharedLinkInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SharedLinkInbox.swift"; sourceTree = "<group>"; };
-		B10A00000000000000000007 /* LinkPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LinkPreviewService.swift"; sourceTree = "<group>"; };
-		B10A00000000000000000008 /* LinkPriceParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LinkPriceParser.swift"; sourceTree = "<group>"; };
-		B10B00000000000000000001 /* ShoppingLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShoppingLinkAdapter.swift"; sourceTree = "<group>"; };
-		B10B00000000000000000002 /* MusinsaLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MusinsaLinkAdapter.swift"; sourceTree = "<group>"; };
-		B10B00000000000000000003 /* OliveYoungLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OliveYoungLinkAdapter.swift"; sourceTree = "<group>"; };
+		B10A00000000000000000006 /* SharedLinkInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedLinkInbox.swift; sourceTree = "<group>"; };
+		B10A00000000000000000007 /* LinkPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewService.swift; sourceTree = "<group>"; };
+		B10A00000000000000000008 /* LinkPriceParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPriceParser.swift; sourceTree = "<group>"; };
+		B10B00000000000000000001 /* ShoppingLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingLinkAdapter.swift; sourceTree = "<group>"; };
+		B10B00000000000000000002 /* MusinsaLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusinsaLinkAdapter.swift; sourceTree = "<group>"; };
+		B10B00000000000000000003 /* OliveYoungLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OliveYoungLinkAdapter.swift; sourceTree = "<group>"; };
 		B10C00000000000000000001 /* View+Keyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Keyboard.swift"; sourceTree = "<group>"; };
-		B10F00000000000000000003 /* WishDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WishDraft.swift"; sourceTree = "<group>"; };
-		B10F00000000000000000004 /* ReminderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReminderManager.swift"; sourceTree = "<group>"; };
-		B10F00000000000000000006 /* WishCategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WishCategoryRepository.swift"; sourceTree = "<group>"; };
+		B10F00000000000000000003 /* WishDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishDraft.swift; sourceTree = "<group>"; };
+		B10F00000000000000000004 /* ReminderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderManager.swift; sourceTree = "<group>"; };
+		B10F00000000000000000006 /* WishCategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WishCategoryRepository.swift; sourceTree = "<group>"; };
+		B11100000000000000000001 /* DuGoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuGoTheme.swift; sourceTree = "<group>"; };
+		B11100000000000000000002 /* DuGoFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuGoFont.swift; sourceTree = "<group>"; };
+		B11100000000000000000003 /* Colors.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Colors.xcassets; sourceTree = "<group>"; };
+		B11100000000000000000004 /* Pretendard-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pretendard-Regular.otf; sourceTree = "<group>"; };
+		B11100000000000000000005 /* Pretendard-Medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pretendard-Medium.otf; sourceTree = "<group>"; };
+		B11100000000000000000006 /* Pretendard-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pretendard-SemiBold.otf; sourceTree = "<group>"; };
 		E3EB0B30305D80860017CC71 /* DuGo-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DuGo-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -119,6 +137,7 @@
 		B11000000000000000000001 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				B11100000000000000000030 /* DesignSystem */,
 				B11000000000000000000002 /* Model */,
 				B11000000000000000000003 /* Service */,
 				B11000000000000000000004 /* UI */,
@@ -155,6 +174,27 @@
 				B10C00000000000000000001 /* View+Keyboard.swift */,
 			);
 			path = UI;
+			sourceTree = "<group>";
+		};
+		B11100000000000000000030 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				B11100000000000000000001 /* DuGoTheme.swift */,
+				B11100000000000000000002 /* DuGoFont.swift */,
+				B11100000000000000000003 /* Colors.xcassets */,
+				B11100000000000000000031 /* Font */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		B11100000000000000000031 /* Font */ = {
+			isa = PBXGroup;
+			children = (
+				B11100000000000000000004 /* Pretendard-Regular.otf */,
+				B11100000000000000000005 /* Pretendard-Medium.otf */,
+				B11100000000000000000006 /* Pretendard-SemiBold.otf */,
+			);
+			path = Font;
 			sourceTree = "<group>";
 		};
 		E3EB0B27305D80860017CC71 = {
@@ -268,6 +308,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B11100000000000000000021 /* Colors.xcassets in Resources */,
+				B11100000000000000000023 /* Pretendard-Regular.otf in Resources */,
+				B11100000000000000000025 /* Pretendard-Medium.otf in Resources */,
+				B11100000000000000000027 /* Pretendard-SemiBold.otf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -275,6 +319,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B11100000000000000000020 /* Colors.xcassets in Resources */,
+				B11100000000000000000022 /* Pretendard-Regular.otf in Resources */,
+				B11100000000000000000024 /* Pretendard-Medium.otf in Resources */,
+				B11100000000000000000026 /* Pretendard-SemiBold.otf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -297,6 +345,8 @@
 				B10F00000000000000000001 /* WishDraft.swift in Sources */,
 				B10F00000000000000000002 /* ReminderManager.swift in Sources */,
 				B10F00000000000000000005 /* WishCategoryRepository.swift in Sources */,
+				B11100000000000000000011 /* DuGoTheme.swift in Sources */,
+				B11100000000000000000013 /* DuGoFont.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -314,6 +364,8 @@
 				B11000000000000000000017 /* OliveYoungLinkAdapter.swift in Sources */,
 				B11000000000000000000018 /* ReminderManager.swift in Sources */,
 				B11000000000000000000019 /* View+Keyboard.swift in Sources */,
+				B11100000000000000000010 /* DuGoTheme.swift in Sources */,
+				B11100000000000000000012 /* DuGoFont.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

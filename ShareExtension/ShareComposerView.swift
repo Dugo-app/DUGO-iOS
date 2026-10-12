@@ -256,6 +256,10 @@ struct ShareComposerView: View {
         WishCategoryRepository().load()
     }
 
+    private var cardShadowColor: Color {
+        .black.opacity(colorScheme == .dark ? 0.12 : 0.04)
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -264,7 +268,7 @@ struct ShareComposerView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     section("상품 링크", optional: false) {
                         TextField("https://…", text: $model.link)
-                            .font(.system(size: 16))
+                            .font(DuGoFont.body16Regular.font)
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -281,8 +285,8 @@ struct ShareComposerView: View {
                             HStack(spacing: 10) {
                                 ProgressView()
                                 Text("공유한 링크를 읽고 있어요")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(themeSecondary)
+                                    .font(DuGoFont.body14Regular.font)
+                                    .foregroundStyle(DuGoTheme.secondary)
                             }
                         }
                     }
@@ -293,8 +297,8 @@ struct ShareComposerView: View {
                                 HStack(spacing: 10) {
                                     ProgressView()
                                     Text("상품 정보를 불러오는 중이에요")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(themeSecondary)
+                                        .font(DuGoFont.body14Regular.font)
+                                        .foregroundStyle(DuGoTheme.secondary)
                                 }
                                 .frame(minHeight: 54)
                             } else {
@@ -307,7 +311,7 @@ struct ShareComposerView: View {
                                     cardDivider
 
                                     TextField("상품 이름", text: $model.title)
-                                        .font(.system(size: 16))
+                                        .font(DuGoFont.body16Regular.font)
                                         .focused($focusedField, equals: .title)
                                         .frame(minHeight: 54)
                                         .background { autofillBackground(for: .title) }
@@ -315,7 +319,7 @@ struct ShareComposerView: View {
                                     cardDivider
 
                                     TextField("가격 (원)", text: $model.price)
-                                        .font(.system(size: 16))
+                                        .font(DuGoFont.body16Regular.font)
                                         .keyboardType(.numberPad)
                                         .focused($focusedField, equals: .price)
                                         .frame(minHeight: 54)
@@ -325,8 +329,8 @@ struct ShareComposerView: View {
 
                                     HStack {
                                         Text("카테고리")
-                                            .font(.system(size: 16))
-                                            .foregroundStyle(themeInk)
+                                            .font(DuGoFont.body16Regular.font)
+                                            .foregroundStyle(DuGoTheme.ink)
 
                                         Spacer()
 
@@ -337,7 +341,7 @@ struct ShareComposerView: View {
                                         }
                                         .labelsHidden()
                                         .pickerStyle(.menu)
-                                        .tint(themeInk)
+                                        .tint(DuGoTheme.ink)
                                     }
                                     .frame(minHeight: 54)
                                 }
@@ -355,7 +359,7 @@ struct ShareComposerView: View {
                             Group {
                                 section("사고 싶은 이유") {
                                     TextField("어떤 순간에 필요할까요?", text: $model.reason, axis: .vertical)
-                                        .font(.system(size: 16))
+                                        .font(DuGoFont.body16Regular.font)
                                         .lineLimit(4...7)
                                         .focused($focusedField, equals: .reason)
                                         .frame(minHeight: 96, alignment: .topLeading)
@@ -364,8 +368,8 @@ struct ShareComposerView: View {
                                 section("다시 만나는 날") {
                                     VStack(alignment: .leading, spacing: 16) {
                                         Toggle("다시 볼 날짜 정하기", isOn: $model.hasReviewDate)
-                                            .font(.system(size: 16, weight: .medium))
-                                            .tint(themeAccent)
+                                            .font(DuGoFont.body16Medium.font)
+                                            .tint(DuGoTheme.accent)
 
                                         if model.hasReviewDate {
                                             cardDivider
@@ -376,8 +380,8 @@ struct ShareComposerView: View {
                                             cardDivider
 
                                             Toggle("알림 받기", isOn: $model.wantsReminder)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .tint(themeAccent)
+                                                .font(DuGoFont.body16Medium.font)
+                                                .tint(DuGoTheme.accent)
                                         }
                                     }
                                 } footer: {
@@ -397,14 +401,14 @@ struct ShareComposerView: View {
                 .animation(revealAnimation, value: showsAdditionalDetails)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(themeBackground)
+            .dugoScreen()
             .navigationTitle("마음 담기")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("취소", action: onCancel)
-                        .tint(themeInk)
+                        .tint(DuGoTheme.ink)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("저장") {
@@ -423,7 +427,7 @@ struct ShareComposerView: View {
                             }
                         }
                     }
-                    .tint(themeAccent)
+                    .tint(DuGoTheme.accent)
                     .fontWeight(.semibold)
                     .disabled(model.validURL == nil || model.isSaving || saveNotice != nil)
                 }
@@ -519,8 +523,8 @@ struct ShareComposerView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(selectedPhoto == nil ? "대표 사진을 가져왔어요" : "대표 사진을 추가했어요")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(themeInk)
+                            .font(DuGoFont.button14Medium.font)
+                            .foregroundStyle(DuGoTheme.ink)
 
                         if selectedPhoto == nil {
                             HStack(spacing: 12) {
@@ -528,8 +532,8 @@ struct ShareComposerView: View {
                                     Task { await model.loadPreview(animate: !reduceMotion) }
                                 } label: {
                                     Text("다시 불러오기")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(themeSecondary)
+                                        .font(DuGoFont.caption12Regular.font)
+                                        .foregroundStyle(DuGoTheme.secondary)
                                         .underline()
                                 }
                                 .buttonStyle(.plain)
@@ -546,15 +550,15 @@ struct ShareComposerView: View {
                     ProgressView()
 
                     Text("사진을 추가하는 중이에요")
-                        .font(.system(size: 14))
-                        .foregroundStyle(themeSecondary)
+                        .font(DuGoFont.body14Regular.font)
+                        .foregroundStyle(DuGoTheme.secondary)
                 }
                 .frame(minHeight: 54)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("대표 사진을 찾지 못했어요")
-                        .font(.system(size: 14))
-                        .foregroundStyle(themeSecondary)
+                        .font(DuGoFont.body14Regular.font)
+                        .foregroundStyle(DuGoTheme.secondary)
 
                     galleryPicker("갤러리에서 직접 추가")
                 }
@@ -563,7 +567,7 @@ struct ShareComposerView: View {
 
             if let photoSelectionMessage {
                 Text(photoSelectionMessage)
-                    .font(.system(size: 12))
+                    .font(DuGoFont.caption12Regular.font)
                     .foregroundStyle(.red)
             }
         }
@@ -572,8 +576,8 @@ struct ShareComposerView: View {
     private func galleryPicker(_ title: String) -> some View {
         PhotosPicker(selection: $selectedPhoto, matching: .images) {
             Text(title)
-                .font(.system(size: 12))
-                .foregroundStyle(themeSecondary)
+                .font(DuGoFont.caption12Regular.font)
+                .foregroundStyle(DuGoTheme.secondary)
                 .underline()
         }
     }
@@ -599,8 +603,8 @@ struct ShareComposerView: View {
                 content()
             }
             footer()
-                .font(.system(size: 12))
-                .foregroundStyle(themeSecondary)
+                .font(DuGoFont.caption12Regular.font)
+                .foregroundStyle(DuGoTheme.secondary)
         }
     }
 
@@ -614,12 +618,12 @@ struct ShareComposerView: View {
 
     private func sectionTitle(_ title: String, optional: Bool) -> some View {
         Text(title)
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(themeInk)
+            .font(DuGoFont.title18SemiBold.font)
+            .foregroundStyle(DuGoTheme.ink)
             .overlay(alignment: .topTrailing) {
                 if !optional {
                     Circle()
-                        .fill(themeAccent)
+                        .fill(DuGoTheme.accent)
                         .frame(width: 6, height: 6)
                         .offset(x: 8, y: -2)
                 }
@@ -638,14 +642,14 @@ struct ShareComposerView: View {
             .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             .background {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(themeSurface)
-                    .shadow(color: themeShadowColor, radius: 5)
+                    .fill(DuGoTheme.surface)
+                    .shadow(color: cardShadowColor, radius: 5)
             }
     }
 
     private var cardDivider: some View {
         Rectangle()
-            .fill(themeBorder.opacity(0.65))
+            .fill(DuGoTheme.border.opacity(0.65))
             .frame(height: 1)
             .padding(.horizontal, -16)
     }
@@ -660,14 +664,14 @@ struct ShareComposerView: View {
                         selectReviewDay(days)
                     } label: {
                         Text(days == 1 ? "내일" : "\(days)일 뒤")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(isSelected ? themeOnAccent : themeSecondary)
+                            .font(DuGoFont.button14Medium.font)
+                            .foregroundStyle(isSelected ? DuGoTheme.onAccent : DuGoTheme.secondary)
                             .padding(.horizontal, 16)
                             .frame(height: 40)
                             .background {
                                 Capsule()
-                                    .fill(isSelected ? themeAccent : themeSurface)
-                                    .shadow(color: themeShadowColor, radius: 4)
+                                    .fill(isSelected ? DuGoTheme.accent : DuGoTheme.surface)
+                                    .shadow(color: cardShadowColor, radius: 4)
                             }
                     }
                     .buttonStyle(.plain)
@@ -776,18 +780,18 @@ struct ShareComposerView: View {
     private func shareErrorToast(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(DuGoFont.button16Medium.font)
 
             Text(message)
-                .font(.system(size: 14, weight: .medium))
+                .font(DuGoFont.button14Medium.font)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(themeBackground)
+        .foregroundStyle(DuGoTheme.background)
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(maxWidth: 560, alignment: .leading)
         .background(
-            themeInk,
+            DuGoTheme.ink,
             in: RoundedRectangle(cornerRadius: 13, style: .continuous)
         )
         .shadow(color: Color.black.opacity(0.14), radius: 12, y: 5)
@@ -795,46 +799,9 @@ struct ShareComposerView: View {
 
     private func autofillBackground(for field: ShareComposerModel.AutofilledField) -> some View {
         Rectangle()
-            .fill(themeAccent.opacity(0.12))
+            .fill(DuGoTheme.accent.opacity(0.12))
             .opacity(model.highlightedFields.contains(field) ? 1 : 0)
             .padding(.horizontal, -16)
             .allowsHitTesting(false)
-    }
-
-    // MARK: - Theme
-
-    private var themeBackground: Color {
-        colorScheme == .dark
-            ? Color(red: 18 / 255, green: 18 / 255, blue: 18 / 255)
-            : Color(red: 251 / 255, green: 251 / 255, blue: 251 / 255)
-    }
-    private var themeSurface: Color {
-        colorScheme == .dark ? Color(red: 34 / 255, green: 34 / 255, blue: 34 / 255) : .white
-    }
-    private var themeInk: Color {
-        colorScheme == .dark
-            ? Color(red: 245 / 255, green: 245 / 255, blue: 245 / 255)
-            : Color(red: 32 / 255, green: 33 / 255, blue: 36 / 255)
-    }
-    private var themeSecondary: Color {
-        colorScheme == .dark
-            ? Color(red: 176 / 255, green: 176 / 255, blue: 176 / 255)
-            : Color(red: 117 / 255, green: 117 / 255, blue: 117 / 255)
-    }
-    private var themeBorder: Color {
-        colorScheme == .dark
-            ? Color(red: 56 / 255, green: 56 / 255, blue: 56 / 255)
-            : Color(red: 233 / 255, green: 233 / 255, blue: 233 / 255)
-    }
-    private var themeShadowColor: Color {
-        .black.opacity(colorScheme == .dark ? 0.12 : 0.04)
-    }
-    private var themeAccent: Color {
-        Color(red: 245 / 255, green: 90 / 255, blue: 116 / 255)
-    }
-    private var themeOnAccent: Color {
-        colorScheme == .dark
-            ? Color(red: 41 / 255, green: 41 / 255, blue: 41 / 255)
-            : Color(red: 247 / 255, green: 247 / 255, blue: 250 / 255)
     }
 }
