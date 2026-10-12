@@ -44,6 +44,7 @@
 		B11100000000000000000025 /* Pretendard-Medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000005 /* Pretendard-Medium.otf */; };
 		B11100000000000000000026 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000006 /* Pretendard-SemiBold.otf */; };
 		B11100000000000000000027 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = B11100000000000000000006 /* Pretendard-SemiBold.otf */; };
+		B20000000000000000000006 /* AppConfig.plist in Resources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* AppConfig.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,7 +72,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		B20000000000000000000001 /* AppURLs.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppURLs.xcconfig; sourceTree = "<group>"; };
 		B10A00000000000000000001 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10A00000000000000000002 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		B10A00000000000000000003 /* ShareComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareComposerView.swift; sourceTree = "<group>"; };
@@ -93,6 +93,7 @@
 		B11100000000000000000004 /* Pretendard-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Regular.otf"; sourceTree = "<group>"; };
 		B11100000000000000000005 /* Pretendard-Medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Medium.otf"; sourceTree = "<group>"; };
 		B11100000000000000000006 /* Pretendard-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-SemiBold.otf"; sourceTree = "<group>"; };
+		B20000000000000000000005 /* AppConfig.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = AppConfig.plist; sourceTree = "<group>"; };
 		E3EB0B30305D80860017CC71 /* DuGo-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DuGo-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -124,14 +125,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		B20000000000000000000002 /* Config */ = {
-			isa = PBXGroup;
-			children = (
-				B20000000000000000000001 /* AppURLs.xcconfig */,
-			);
-			path = Config;
-			sourceTree = "<group>";
-		};
 		B10A00000000000000000022 /* ShareExtension */ = {
 			isa = PBXGroup;
 			children = (
@@ -204,6 +197,14 @@
 				B11100000000000000000006 /* Pretendard-SemiBold.otf */,
 			);
 			path = Font;
+			sourceTree = "<group>";
+		};
+		B20000000000000000000002 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000005 /* AppConfig.plist */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		E3EB0B27305D80860017CC71 = {
@@ -340,6 +341,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B20000000000000000000006 /* AppConfig.plist in Resources */,
 				B11100000000000000000020 /* Colors.xcassets in Resources */,
 				B11100000000000000000022 /* Pretendard-Regular.otf in Resources */,
 				B11100000000000000000024 /* Pretendard-Medium.otf in Resources */,
@@ -523,7 +525,6 @@
 		};
 		B10D00000000000000000002 /* Development */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B20000000000000000000001 /* AppURLs.xcconfig */;
 			buildSettings = {
 				APNS_ENVIRONMENT = development;
 				APP_DISPLAY_NAME = "두고dev";
@@ -719,7 +720,6 @@
 		};
 		E3EB0B3C305D80870017CC71 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B20000000000000000000001 /* AppURLs.xcconfig */;
 			buildSettings = {
 				APNS_ENVIRONMENT = development;
 				APP_DISPLAY_NAME = "두고";
@@ -766,7 +766,6 @@
 		};
 		E3EB0B3D305D80870017CC71 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B20000000000000000000001 /* AppURLs.xcconfig */;
 			buildSettings = {
 				APNS_ENVIRONMENT = production;
 				APP_DISPLAY_NAME = "두고";

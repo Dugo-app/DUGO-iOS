@@ -24,10 +24,6 @@
 	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>DuGoCloudKitContainerIdentifier</key>
 	<string>$(ICLOUD_CONTAINER_IDENTIFIER)</string>
-	<key>DuGoShareHelpURL</key>
-	<string>$(DUGO_SHARE_HELP_URL)</string>
-	<key>DuGoPrivacyPolicyURL</key>
-	<string>$(DUGO_PRIVACY_POLICY_URL)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

@@ -1,9 +1,0 @@
-//
-//  AppURLs.xcconfig
-//  DuGo-iOS
-//
-//  Created by 김승원 on 12/10/26.
-//
-
-DUGO_SHARE_HELP_URL = https:/$()/hail-anger-c0a.notion.site/3f6d2ca4eb7c8061ba15f28fa6c86853
-DUGO_PRIVACY_POLICY_URL = https:/$()/hail-anger-c0a.notion.site/3eed2ca4eb7c8052a25cefcbbb9cf116?pvs=74

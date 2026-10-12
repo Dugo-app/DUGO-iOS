@@ -7,13 +7,13 @@
 
 # 앱 설정
 
-`AppURLs.xcconfig`에는 공개 가능한 도움말·개인정보 처리방침 주소만 둡니다. 앱은 이 값을 `Info.plist`를 거쳐 `AppEnvironment`에서 읽습니다.
+앱 설정은 로컬 [AppConfig.plist](AppConfig.plist) 한 파일에서 관리합니다. `shareHelpURL`과 `privacyPolicyURL`에는 앱 내 웹뷰 주소를, `firebase.development`와 `firebase.release`에는 각 Firebase 앱의 값을 넣습니다. 앱은 빌드 설정에 따라 해당 환경을 선택합니다.
 
-Firebase 설정 파일은 Git에 올리지 않습니다. Firebase 콘솔에서 각 앱의 Apple 설정 파일을 내려받아 아래 위치에 넣으세요.
+Firebase 콘솔에서 내려받은 Apple 설정 파일의 값을 다음과 같이 옮길 수 있습니다.
 
-| 앱 | 번들 ID | 로컬 파일 |
+| AppConfig.plist 경로 | Firebase 설정 키 | 번들 ID |
 | --- | --- | --- |
-| 두고 | `app.seungwon.dugo` | `DuGo-iOS/GoogleService-Info.plist` |
-| 두고dev | `app.seungwon.dugo.dev` | `DuGo-iOS/GoogleService-Info-Dev.plist` |
+| `firebase.release` | `API_KEY`, `GCM_SENDER_ID`, `GOOGLE_APP_ID`, `PROJECT_ID`, `BUNDLE_ID`, `STORAGE_BUCKET` | `app.seungwon.dugo` |
+| `firebase.development` | 같은 키 | `app.seungwon.dugo.dev` |
 
-두 파일은 `.gitignore`에 포함되어 있으며, Xcode 빌드에는 로컬 파일이 필요합니다. 기존에 Git에 올라간 키 값은 기록에 남으므로 Google Cloud Console에서 해당 키의 API·iOS 앱 제한을 확인하고, 필요한 경우 키를 교체하세요. Firebase의 클라이언트 API 키는 앱 번들에도 포함되므로 파일을 Git에서 제외하는 것만으로 비밀 키가 되지는 않습니다.
+`AppConfig.plist`는 Git 추적에서 제외되지만 Xcode 빌드에는 필요합니다. 이미 Git에 올라간 키는 과거 기록에 남습니다. Firebase의 클라이언트 API 키도 앱 번들에 포함되므로 Git에서 제외하는 것만으로 비밀 키가 되지는 않습니다.
