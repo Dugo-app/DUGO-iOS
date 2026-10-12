@@ -482,7 +482,6 @@ struct ShareComposerView: View {
                 await loadSelectedPhoto(selectedPhoto)
             }
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     // MARK: - Subviews
