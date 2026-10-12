@@ -14,20 +14,7 @@ import UIKit
 final class ShareComposerModel: ObservableObject {
     // MARK: - Properties
 
-    @Published var link = ""
-    @Published var title = ""
-    @Published var price = ""
-    @Published var reason = ""
-    @Published var category = "미분류"
-    @Published var hasReviewDate = true
-    @Published var reviewDate =
-        Calendar.current.date(
-            byAdding: .day,
-            value: 3,
-            to: Calendar.current.startOfDay(for: .now)
-        ) ?? .now
-    @Published var wantsReminder = false
-    @Published var imageData: Data?
+    @Published var draft = WishDraft()
     @Published var isReadingLink = false
     @Published var isLoadingPreview = false
     @Published var previewedLink: String?
@@ -40,17 +27,48 @@ final class ShareComposerModel: ObservableObject {
     private var sharedContentTitle: String?
     private var sharedContentPrice: Int?
     private var sharedContentImageData: Data?
+    private var automaticTitle: String?
+    private var automaticPrice: String?
 
     // MARK: - Computed Properties
 
-    var validURL: URL? {
-        guard let url = URL(string: link.trimmingCharacters(in: .whitespacesAndNewlines)),
-            let scheme = url.scheme?.lowercased(),
-            ["http", "https"].contains(scheme),
-            url.host != nil
-        else { return nil }
-        return url
+    var link: String {
+        get { draft.link }
+        set { draft.link = newValue }
     }
+    var title: String {
+        get { draft.title }
+        set { draft.title = newValue }
+    }
+    var price: String {
+        get { draft.price }
+        set { draft.price = newValue }
+    }
+    var reason: String {
+        get { draft.reason }
+        set { draft.reason = newValue }
+    }
+    var category: String {
+        get { draft.category }
+        set { draft.category = newValue }
+    }
+    var hasReviewDate: Bool {
+        get { draft.hasReviewDate }
+        set { draft.hasReviewDate = newValue }
+    }
+    var reviewDate: Date {
+        get { draft.reviewDate }
+        set { draft.reviewDate = newValue }
+    }
+    var wantsReminder: Bool {
+        get { draft.wantsReminder }
+        set { draft.wantsReminder = newValue }
+    }
+    var imageData: Data? {
+        get { draft.imageData }
+        set { draft.imageData = newValue }
+    }
+    var validURL: URL? { draft.validURL }
 
     private var sharedAutofilledFields: Set<AutofilledField> {
         var fields: Set<AutofilledField> = []
@@ -87,9 +105,15 @@ final class ShareComposerModel: ObservableObject {
         previewedLink = nil
         highlightedFields = []
         imageData = usesSharedContent ? sharedContentImageData : nil
-        title = usesSharedContent ? sharedContentTitle ?? "" : ""
-        price = usesSharedContent ? sharedContentPrice.map(String.init) ?? "" : ""
-        formatPrice()
+        if title == automaticTitle || title.isEmpty {
+            title = usesSharedContent ? sharedContentTitle ?? "" : ""
+            automaticTitle = title.isEmpty ? nil : title
+        }
+        if price == automaticPrice || price.isEmpty {
+            price = usesSharedContent ? sharedContentPrice.map(String.init) ?? "" : ""
+            formatPrice()
+            automaticPrice = price.isEmpty ? nil : price
+        }
     }
 
     func applySharedContent(
@@ -105,7 +129,7 @@ final class ShareComposerModel: ObservableObject {
         link = url.absoluteString
     }
 
-    func loadPreview(animate: Bool) async {
+    func loadPreview(animate: Bool, isEditingPrice: Bool = false) async {
         guard validURL != nil else { return }
         let requestedLink = link
         var newlyAutofilledFields: Set<AutofilledField> = []
@@ -116,9 +140,10 @@ final class ShareComposerModel: ObservableObject {
             guard !Task.isCancelled, link == requestedLink else { return }
             if imageData == nil, let image = preview.imageData {
                 withAnimation(animate ? .easeInOut(duration: 0.28) : nil) {
-                    imageData = image
+                    if draft.fillImageIfMissing(image) {
+                        newlyAutofilledFields.insert(.image)
+                    }
                 }
-                newlyAutofilledFields.insert(.image)
             }
             if animate {
                 try? await Task.sleep(for: .milliseconds(150))
@@ -127,21 +152,24 @@ final class ShareComposerModel: ObservableObject {
 
             if title.isEmpty, let previewTitle = preview.title {
                 withAnimation(animate ? .easeInOut(duration: 0.28) : nil) {
-                    title = previewTitle
+                    if draft.fillTitleIfEmpty(previewTitle) {
+                        automaticTitle = draft.title
+                        newlyAutofilledFields.insert(.title)
+                    }
                 }
-                newlyAutofilledFields.insert(.title)
             }
             if animate {
                 try? await Task.sleep(for: .milliseconds(150))
             }
             guard !Task.isCancelled, link == requestedLink else { return }
 
-            if price.isEmpty, let amount = preview.price {
+            if price.isEmpty, !isEditingPrice, let amount = preview.price {
                 withAnimation(animate ? .easeInOut(duration: 0.28) : nil) {
-                    price = String(amount)
-                    formatPrice()
+                    if draft.fillPriceIfEmpty(amount) {
+                        automaticPrice = draft.price
+                        newlyAutofilledFields.insert(.price)
+                    }
                 }
-                newlyAutofilledFields.insert(.price)
             }
         } catch {
         }
@@ -157,70 +185,40 @@ final class ShareComposerModel: ObservableObject {
         }
     }
 
-    func save() throws {
-        guard let url = validURL else { throw ShareError.invalidLink }
-        let amount = price.replacingOccurrences(of: ",", with: "")
-            .replacingOccurrences(of: "원", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let parsedPrice: Int?
-        if amount.isEmpty {
-            parsedPrice = nil
-        } else if let value = Int(amount), value >= 0 {
-            parsedPrice = value
-        } else {
-            throw ShareError.invalidPrice
-        }
-        if hasReviewDate && reviewDate <= .now {
-            throw ShareError.pastDate
-        }
-
+    func save() async throws -> String? {
+        let values = try draft.validated()
         let wish = PendingSharedWish(
             id: UUID(),
             createdAt: .now,
-            link: url.absoluteString,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? (url.host ?? url.absoluteString)
-                : title.trimmingCharacters(in: .whitespacesAndNewlines),
+            link: values.link.absoluteString,
+            title: values.title,
             categoryRaw: category,
-            price: parsedPrice,
+            price: values.price,
             reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
             reviewAt: hasReviewDate ? reviewDate : nil,
             wantsReminder: hasReviewDate && wantsReminder,
             imageData: imageData
         )
         try SharedLinkInbox.enqueue(wish)
+        let pendingReminders = SharedLinkInbox.pending().compactMap { pending -> WishReminder? in
+            guard pending.wantsReminder == true, let date = pending.reviewAt else { return nil }
+            return WishReminder(itemID: pending.id, title: pending.title, date: date)
+        }
+        if !pendingReminders.isEmpty {
+            let reminders = ReminderManager()
+            await reminders.requestPermissionIfNeeded()
+            await reminders.synchronizeAdditional(pendingReminders)
+            return reminders.notice
+        }
+        return nil
     }
 
     func preparePriceForEditing() {
-        price = price.filter(\.isNumber)
+        draft.preparePriceForEditing()
     }
 
     func formatPrice() {
-        let digits = price.filter(\.isNumber)
-        guard !digits.isEmpty, let amount = Int(digits) else { return }
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.maximumFractionDigits = 0
-
-        if let formattedPrice = formatter.string(from: NSNumber(value: amount)) {
-            price = "\(formattedPrice)원"
-        }
-    }
-
-    // MARK: - Private Types
-
-    private enum ShareError: LocalizedError {
-        case invalidLink, invalidPrice, pastDate
-
-        var errorDescription: String? {
-            switch self {
-            case .invalidLink: "http 또는 https 상품 링크를 넣어주세요"
-            case .invalidPrice: "가격은 0 이상의 숫자로 입력해주세요"
-            case .pastDate: "다시 볼 날짜를 미래로 정해주세요"
-            }
-        }
+        draft.formatPrice()
     }
 }
 
@@ -244,6 +242,7 @@ struct ShareComposerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focusedField: InputField?
     @State private var visibleErrorMessage: String?
+    @State private var saveNotice: String?
     @State private var errorDismissTask: Task<Void, Never>?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isLoadingSelectedPhoto = false
@@ -254,11 +253,7 @@ struct ShareComposerView: View {
     // MARK: - Computed Properties
 
     private var categories: [String] {
-        let defaults = UserDefaults(suiteName: SharedLinkInbox.groupIdentifier)
-        let saved = defaults?.stringArray(forKey: "wishCategories.v1")
-        return saved?.isEmpty == false
-            ? saved ?? ["미분류"]
-            : ["디지털", "패션", "생활", "취미", "미분류"]
+        WishCategoryRepository().load()
     }
 
     // MARK: - Body
@@ -414,20 +409,34 @@ struct ShareComposerView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("저장") {
                         model.isSaving = true
-                        defer { model.isSaving = false }
-                        do {
-                            try model.save()
-                            onSaved()
-                        } catch {
-                            model.errorMessage = error.localizedDescription
+                        focusedField = nil
+                        Task {
+                            defer { model.isSaving = false }
+                            do {
+                                if let notice = try await model.save() {
+                                    saveNotice = notice
+                                } else {
+                                    onSaved()
+                                }
+                            } catch {
+                                model.errorMessage = error.localizedDescription
+                            }
                         }
                     }
                     .tint(themeAccent)
                     .fontWeight(.semibold)
-                    .disabled(model.validURL == nil || model.isSaving)
+                    .disabled(model.validURL == nil || model.isSaving || saveNotice != nil)
                 }
             }
             .dismissKeyboardOnBackgroundTap()
+            .alert("마음은 저장했어요", isPresented: Binding(
+                get: { saveNotice != nil },
+                set: { if !$0 { saveNotice = nil } }
+            )) {
+                Button("확인", action: onSaved)
+            } message: {
+                Text(saveNotice ?? "")
+            }
             .overlay(alignment: .top) {
                 if let visibleErrorMessage {
                     shareErrorToast(visibleErrorMessage)
@@ -467,7 +476,10 @@ struct ShareComposerView: View {
                 guard model.validURL != nil else { return }
                 try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
-                await model.loadPreview(animate: !reduceMotion)
+                await model.loadPreview(
+                    animate: !reduceMotion,
+                    isEditingPrice: focusedField == .price
+                )
             }
             .task(id: model.highlightedFields) {
                 guard !model.highlightedFields.isEmpty else { return }
@@ -735,7 +747,7 @@ struct ShareComposerView: View {
     private func presentInvalidLinkErrorIfNeeded() {
         let trimmed = model.link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, model.validURL == nil else { return }
-        model.errorMessage = "http 또는 https로 시작하는 상품 링크를 넣어주세요"
+        model.errorMessage = DraftError.invalidLink.errorDescription
     }
 
     private func presentErrorToast(_ message: String) {

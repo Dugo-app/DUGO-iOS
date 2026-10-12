@@ -17,6 +17,9 @@
 		B10B00000000000000000005 /* DuGo-iOS/Service/MusinsaLinkAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10B00000000000000000002 /* DuGo-iOS/Service/MusinsaLinkAdapter.swift */; };
 		B10B00000000000000000006 /* DuGo-iOS/Service/OliveYoungLinkAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10B00000000000000000003 /* DuGo-iOS/Service/OliveYoungLinkAdapter.swift */; };
 		B10C00000000000000000002 /* DuGo-iOS/Global/Extension/View+Keyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10C00000000000000000001 /* DuGo-iOS/Global/Extension/View+Keyboard.swift */; };
+		B10F00000000000000000001 /* DuGo-iOS/Model/WishDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10F00000000000000000003 /* DuGo-iOS/Model/WishDraft.swift */; };
+		B10F00000000000000000002 /* DuGo-iOS/Service/ReminderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10F00000000000000000004 /* DuGo-iOS/Service/ReminderManager.swift */; };
+		B10F00000000000000000005 /* DuGo-iOS/Model/WishCategoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10F00000000000000000006 /* DuGo-iOS/Model/WishCategoryRepository.swift */; };
 		B10E00000000000000000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = B10E00000000000000000004 /* FirebaseCore */; };
 		B10E00000000000000000002 /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = B10E00000000000000000005 /* FirebaseRemoteConfig */; };
 /* End PBXBuildFile section */
@@ -58,6 +61,9 @@
 		B10B00000000000000000002 /* DuGo-iOS/Service/MusinsaLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuGo-iOS/Service/MusinsaLinkAdapter.swift"; sourceTree = "<group>"; };
 		B10B00000000000000000003 /* DuGo-iOS/Service/OliveYoungLinkAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuGo-iOS/Service/OliveYoungLinkAdapter.swift"; sourceTree = "<group>"; };
 		B10C00000000000000000001 /* DuGo-iOS/Global/Extension/View+Keyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuGo-iOS/Global/Extension/View+Keyboard.swift"; sourceTree = "<group>"; };
+		B10F00000000000000000003 /* DuGo-iOS/Model/WishDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuGo-iOS/Model/WishDraft.swift"; sourceTree = "<group>"; };
+		B10F00000000000000000004 /* DuGo-iOS/Service/ReminderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuGo-iOS/Service/ReminderManager.swift"; sourceTree = "<group>"; };
+		B10F00000000000000000006 /* DuGo-iOS/Model/WishCategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuGo-iOS/Model/WishCategoryRepository.swift"; sourceTree = "<group>"; };
 		E3EB0B30305D80860017CC71 /* DuGo-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DuGo-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -112,6 +118,9 @@
 				B10B00000000000000000002 /* DuGo-iOS/Service/MusinsaLinkAdapter.swift */,
 				B10B00000000000000000003 /* DuGo-iOS/Service/OliveYoungLinkAdapter.swift */,
 				B10C00000000000000000001 /* DuGo-iOS/Global/Extension/View+Keyboard.swift */,
+				B10F00000000000000000003 /* DuGo-iOS/Model/WishDraft.swift */,
+				B10F00000000000000000004 /* DuGo-iOS/Service/ReminderManager.swift */,
+				B10F00000000000000000006 /* DuGo-iOS/Model/WishCategoryRepository.swift */,
 				E3EB0B31305D80860017CC71 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -243,6 +252,9 @@
 				B10B00000000000000000005 /* DuGo-iOS/Service/MusinsaLinkAdapter.swift in Sources */,
 				B10B00000000000000000006 /* DuGo-iOS/Service/OliveYoungLinkAdapter.swift in Sources */,
 				B10C00000000000000000002 /* DuGo-iOS/Global/Extension/View+Keyboard.swift in Sources */,
+				B10F00000000000000000001 /* DuGo-iOS/Model/WishDraft.swift in Sources */,
+				B10F00000000000000000002 /* DuGo-iOS/Service/ReminderManager.swift in Sources */,
+				B10F00000000000000000005 /* DuGo-iOS/Model/WishCategoryRepository.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
