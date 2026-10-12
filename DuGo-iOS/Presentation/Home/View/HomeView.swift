@@ -13,6 +13,7 @@ struct HomeView: View {
 
     @ObservedObject private var viewModel: HomeViewModel
     private let reminders: ReminderManager
+    private let cloudSyncConfigured: Bool
     private let onAddTapped: () -> Void
     private let scrollToTopRequest: Int
     @State private var openingMessage: String
@@ -22,11 +23,13 @@ struct HomeView: View {
     init(
         viewModel: HomeViewModel,
         reminders: ReminderManager,
+        cloudSyncConfigured: Bool,
         onAddTapped: @escaping () -> Void,
         scrollToTopRequest: Int = 0
     ) {
         self.viewModel = viewModel
         self.reminders = reminders
+        self.cloudSyncConfigured = cloudSyncConfigured
         self.onAddTapped = onAddTapped
         self.scrollToTopRequest = scrollToTopRequest
         _openingMessage = State(initialValue: DuGoGreeting.randomOpeningMessage)
@@ -90,7 +93,8 @@ struct HomeView: View {
             NavigationLink {
                 SettingsView(
                     viewModel: viewModel,
-                    reminders: reminders
+                    reminders: reminders,
+                    cloudSyncConfigured: cloudSyncConfigured
                 )
             } label: {
                 Image(systemName: "gearshape")

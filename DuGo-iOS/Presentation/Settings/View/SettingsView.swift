@@ -47,6 +47,7 @@ struct SettingsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @StateObject private var versionMonitor = AppVersionMonitor()
+    @StateObject private var cloudSyncMonitor: CloudSyncMonitor
     @State private var notificationAuthorizationStatus: UNAuthorizationStatus?
     @State private var isShowingOnboarding = false
     @State private var isCheckingForUpdate = false
@@ -57,10 +58,14 @@ struct SettingsView: View {
 
     init(
         viewModel: HomeViewModel,
-        reminders: ReminderManager
+        reminders: ReminderManager,
+        cloudSyncConfigured: Bool
     ) {
         self.viewModel = viewModel
         self.reminders = reminders
+        _cloudSyncMonitor = StateObject(
+            wrappedValue: CloudSyncMonitor(isConfigured: cloudSyncConfigured)
+        )
     }
 
     // MARK: - Body
@@ -69,6 +74,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 managementSection
+
+                dataSection
 
                 permissionSection
 
@@ -89,11 +96,13 @@ struct SettingsView: View {
         .dugoScreen()
         .task {
             await refreshNotificationAuthorizationStatus()
+            await cloudSyncMonitor.refresh()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
                 await refreshNotificationAuthorizationStatus()
+                await cloudSyncMonitor.refresh()
             }
         }
         .fullScreenCover(isPresented: $isShowingOnboarding) {
@@ -134,6 +143,23 @@ struct SettingsView: View {
                 )
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private var dataSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            settingsSection(title: "데이터") {
+                settingsRow(
+                    title: "iCloud 동기화",
+                    systemImage: "icloud",
+                    trailingText: cloudSyncMonitor.status.title
+                )
+            }
+
+            Text(cloudSyncMonitor.status.description)
+                .applyDuGoFont(.caption12Regular)
+                .foregroundStyle(DuGoTheme.secondary)
+                .padding(.horizontal, 4)
         }
     }
 

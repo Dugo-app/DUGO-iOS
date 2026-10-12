@@ -35,6 +35,7 @@ final class HomeViewModel: ObservableObject {
         self.categoryRepository = categoryRepository
         categories = categoryRepository.load()
         context.autosaveEnabled = false
+        migrateLegacyCategoriesIfNeeded()
         reload()
     }
 
@@ -96,7 +97,14 @@ final class HomeViewModel: ObservableObject {
                     SortDescriptor(\.createdAt, order: .reverse)
                 ])
             )
-            synchronizeCategoriesWithItems()
+            let categoryEntries = try context.fetch(FetchDescriptor<CategoryEntry>())
+            categories = resolvedCategories(from: categoryEntries)
+            try reconcileItemsWithDeletedCategories(categoryEntries)
+            try synchronizeCategoriesWithItems(categoryEntries)
+            categoryRepository.save(categories)
+            if let selectedCategory, !categories.contains(selectedCategory) {
+                self.selectedCategory = nil
+            }
         } catch { errorMessage = "보관함을 불러오지 못했어요 다시 시도해주세요" }
     }
 
@@ -236,8 +244,22 @@ final class HomeViewModel: ObservableObject {
 
         let uncategorized = WishCategory.other.rawValue
         let insertionIndex = categories.firstIndex(of: uncategorized) ?? categories.endIndex
-        categories.insert(name, at: insertionIndex)
-        categoryRepository.save(categories)
+        do {
+            let entries = try ensureCategoryEntries()
+            updateCategoryEntry(
+                name: name,
+                sortOrder: insertionIndex,
+                isDeleted: false,
+                entries: entries
+            )
+            try context.save()
+            categories.insert(name, at: insertionIndex)
+            categoryRepository.save(categories)
+        } catch {
+            context.rollback()
+            reload()
+            throw WishCategoryManagementError.saveFailed
+        }
     }
 
     func renameCategory(_ category: String, to rawName: String) throws {
@@ -254,12 +276,27 @@ final class HomeViewModel: ObservableObject {
         }
         guard name != category else { return }
 
-        let affectedItems = items.filter { $0.categoryRaw == category }
-        for item in affectedItems {
-            item.categoryRaw = name
-        }
-
         do {
+            let entries = try ensureCategoryEntries()
+            let changedAt = Date.now
+            updateCategoryEntry(
+                name: category,
+                sortOrder: index,
+                isDeleted: true,
+                replacementName: name,
+                updatedAt: changedAt,
+                entries: entries
+            )
+            updateCategoryEntry(
+                name: name,
+                sortOrder: index,
+                isDeleted: false,
+                updatedAt: changedAt,
+                entries: entries
+            )
+            for item in items where item.categoryRaw == category {
+                item.categoryRaw = name
+            }
             try context.save()
             categories[index] = name
             categoryRepository.save(categories)
@@ -282,13 +319,17 @@ final class HomeViewModel: ObservableObject {
             throw WishCategoryManagementError.missing
         }
 
-        let uncategorized = WishCategory.other.rawValue
-        let affectedItems = items.filter { $0.categoryRaw == category }
-        for item in affectedItems {
-            item.categoryRaw = uncategorized
-        }
-
         do {
+            let entries = try ensureCategoryEntries()
+            updateCategoryEntry(
+                name: category,
+                sortOrder: categories.firstIndex(of: category) ?? 0,
+                isDeleted: true,
+                entries: entries
+            )
+            for item in items where item.categoryRaw == category {
+                item.categoryRaw = WishCategory.other.rawValue
+            }
             try context.save()
             categories.removeAll { $0 == category }
             categoryRepository.save(categories)
@@ -308,6 +349,7 @@ final class HomeViewModel: ObservableObject {
         var movableCategories = categories.filter { $0 != uncategorized }
 
         let sourceIndices = source.sorted()
+        guard sourceIndices.allSatisfy({ movableCategories.indices.contains($0) }) else { return }
         let movingCategories = sourceIndices.map { movableCategories[$0] }
         for index in sourceIndices.reversed() {
             movableCategories.remove(at: index)
@@ -320,8 +362,26 @@ final class HomeViewModel: ObservableObject {
         )
         movableCategories.insert(contentsOf: movingCategories, at: insertionIndex)
 
-        categories = movableCategories + [uncategorized]
-        categoryRepository.save(categories)
+        do {
+            let entries = try ensureCategoryEntries()
+            let changedAt = Date.now
+            for (index, name) in movableCategories.enumerated() {
+                updateCategoryEntry(
+                    name: name,
+                    sortOrder: index,
+                    isDeleted: false,
+                    updatedAt: changedAt,
+                    entries: entries
+                )
+            }
+            try context.save()
+            categories = movableCategories + [uncategorized]
+            categoryRepository.save(categories)
+        } catch {
+            context.rollback()
+            reload()
+            errorMessage = WishCategoryManagementError.saveFailed.errorDescription
+        }
     }
 
     // MARK: - Private Methods
@@ -336,9 +396,138 @@ final class HomeViewModel: ObservableObject {
         return name
     }
 
-    private func synchronizeCategoriesWithItems() {
+    private func migrateLegacyCategoriesIfNeeded() {
+        guard !categoryRepository.hasMigratedToCloud else { return }
+        guard categoryRepository.hasStoredCategories else {
+            categoryRepository.markMigratedToCloud()
+            return
+        }
+
+        do {
+            let entries = try context.fetch(FetchDescriptor<CategoryEntry>())
+            let storedNames = Set(entries.map(\.name))
+            let legacyNames = Set(categories)
+            for (index, name) in categories.enumerated()
+            where name != WishCategory.other.rawValue && !storedNames.contains(name) {
+                context.insert(
+                    CategoryEntry(
+                        name: name,
+                        sortOrder: index,
+                        updatedAt: Date(timeIntervalSince1970: 0)
+                    )
+                )
+            }
+            for name in WishCategoryRepository.defaultCategories
+            where name != WishCategory.other.rawValue
+                && !legacyNames.contains(name)
+                && !storedNames.contains(name) {
+                context.insert(
+                    CategoryEntry(
+                        name: name,
+                        sortOrder: 0,
+                        isDeleted: true
+                    )
+                )
+            }
+            try context.save()
+            categoryRepository.markMigratedToCloud()
+        } catch {
+            context.rollback()
+            errorMessage = "카테고리를 동기화할 준비를 하지 못했어요 다시 실행해 주세요"
+        }
+    }
+
+    private func resolvedCategories(from entries: [CategoryEntry]) -> [String] {
+        let latest = latestCategoryEntries(from: entries)
+        let active = latest.values
+            .filter { !$0.isDeleted }
+            .map { (name: $0.name, sortOrder: $0.sortOrder) }
+        let implicitDefaults = WishCategoryRepository.defaultCategories.enumerated()
+            .filter { $0.element != WishCategory.other.rawValue && latest[$0.element] == nil }
+            .map { (name: $0.element, sortOrder: $0.offset) }
+        let ordered = (active + implicitDefaults)
+            .sorted {
+                $0.sortOrder == $1.sortOrder
+                    ? $0.name < $1.name
+                    : $0.sortOrder < $1.sortOrder
+            }
+            .map(\.name)
+        return ordered + [WishCategory.other.rawValue]
+    }
+
+    private func latestCategoryEntries(from entries: [CategoryEntry]) -> [String: CategoryEntry] {
+        var latest: [String: CategoryEntry] = [:]
+        for entry in entries {
+            guard let current = latest[entry.name] else {
+                latest[entry.name] = entry
+                continue
+            }
+            if entry.updatedAt > current.updatedAt
+                || (entry.updatedAt == current.updatedAt && entry.isDeleted && !current.isDeleted)
+            {
+                latest[entry.name] = entry
+            }
+        }
+        return latest
+    }
+
+    private func ensureCategoryEntries() throws -> [CategoryEntry] {
+        var entries = try context.fetch(FetchDescriptor<CategoryEntry>())
+        let storedNames = Set(entries.map(\.name))
+        for (index, name) in categories.enumerated()
+        where name != WishCategory.other.rawValue && !storedNames.contains(name) {
+            let entry = CategoryEntry(
+                name: name,
+                sortOrder: index,
+                updatedAt: Date(timeIntervalSince1970: 0)
+            )
+            context.insert(entry)
+            entries.append(entry)
+        }
+        return entries
+    }
+
+    private func updateCategoryEntry(
+        name: String,
+        sortOrder: Int,
+        isDeleted: Bool,
+        replacementName: String? = nil,
+        updatedAt: Date = .now,
+        entries: [CategoryEntry]
+    ) {
+        let entry = latestCategoryEntries(from: entries)[name]
+        if let entry {
+            entry.sortOrder = sortOrder
+            entry.isDeleted = isDeleted
+            entry.replacementName = replacementName
+            entry.updatedAt = updatedAt
+        } else {
+            context.insert(
+                CategoryEntry(
+                    name: name,
+                    sortOrder: sortOrder,
+                    isDeleted: isDeleted,
+                    replacementName: replacementName,
+                    updatedAt: updatedAt
+                )
+            )
+        }
+    }
+
+    private func reconcileItemsWithDeletedCategories(_ entries: [CategoryEntry]) throws {
+        let deleted = latestCategoryEntries(from: entries).filter { $0.value.isDeleted }
+        var hasChanges = false
+        for item in items {
+            guard let entry = deleted[item.categoryRaw] else { continue }
+            item.categoryRaw = entry.replacementName ?? WishCategory.other.rawValue
+            hasChanges = true
+        }
+        if hasChanges { try context.save() }
+    }
+
+    private func synchronizeCategoriesWithItems(_ entries: [CategoryEntry]) throws {
         let uncategorized = WishCategory.other.rawValue
-        let storedNames = Set(categories)
+        let storedNames = Set(entries.map(\.name)).union(categories)
         let missingNames =
             items
             .map(\.categoryRaw)
@@ -348,7 +537,16 @@ final class HomeViewModel: ObservableObject {
 
         let uniqueMissingNames = Array(Set(missingNames)).sorted()
         let insertionIndex = categories.firstIndex(of: uncategorized) ?? categories.endIndex
+        for (offset, name) in uniqueMissingNames.enumerated() {
+            context.insert(
+                CategoryEntry(
+                    name: name,
+                    sortOrder: insertionIndex + offset,
+                    updatedAt: Date(timeIntervalSince1970: 0)
+                )
+            )
+        }
+        try context.save()
         categories.insert(contentsOf: uniqueMissingNames, at: insertionIndex)
-        categoryRepository.save(categories)
     }
 }

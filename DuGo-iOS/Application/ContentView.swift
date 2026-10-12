@@ -5,6 +5,7 @@
 //  Created by 김승원 on 19/9/26.
 //
 
+import CoreData
 import SwiftData
 import SwiftUI
 
@@ -22,6 +23,7 @@ struct ContentView: View {
     @StateObject private var viewModel: HomeViewModel
     @ObservedObject private var reminders: ReminderManager
     @Environment(\.scenePhase) private var scenePhase
+    private let cloudSyncConfigured: Bool
 
     @State private var selectedTab: AppTab = .home
     @State private var tabActionHandler = DuGoTabActionHandler(actionTabIndex: 1)
@@ -32,11 +34,16 @@ struct ContentView: View {
 
     // MARK: - Initializer
 
-    init(context: ModelContext, reminders: ReminderManager) {
+    init(
+        context: ModelContext,
+        reminders: ReminderManager,
+        cloudSyncConfigured: Bool
+    ) {
         _viewModel = StateObject(
             wrappedValue: HomeViewModel(context: context, reminders: reminders)
         )
         self.reminders = reminders
+        self.cloudSyncConfigured = cloudSyncConfigured
     }
 
     // MARK: - Body
@@ -55,6 +62,22 @@ struct ContentView: View {
             if phase == .active {
                 Task { await viewModel.refresh() }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
+            Task { await viewModel.refresh() }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSPersistentCloudKitContainer.eventChangedNotification
+            )
+        ) { notification in
+            guard let event = notification.userInfo?[
+                NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+            ] as? NSPersistentCloudKitContainer.Event,
+                event.type == .import,
+                event.endDate != nil
+            else { return }
+            Task { await viewModel.refresh() }
         }
         .onChange(of: reminders.openedItemID) { _, _ in
             openNotification()
@@ -92,6 +115,7 @@ struct ContentView: View {
                 HomeView(
                     viewModel: viewModel,
                     reminders: reminders,
+                    cloudSyncConfigured: cloudSyncConfigured,
                     onAddTapped: presentEditor,
                     scrollToTopRequest: homeScrollToTopRequest
                 )

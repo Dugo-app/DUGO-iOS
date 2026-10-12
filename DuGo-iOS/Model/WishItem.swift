@@ -10,17 +10,17 @@ import SwiftData
 
 @Model
 final class WishItem {
-    @Attribute(.unique) var id: UUID
-    var title: String
-    var link: String
-    var categoryRaw: String
+    var id: UUID = UUID()
+    var title: String = ""
+    var link: String = ""
+    var categoryRaw: String = "미분류"
     var price: Int?
-    var reason: String
-    var initialReason: String
-    var createdAt: Date
+    var reason: String = ""
+    var initialReason: String = ""
+    var createdAt: Date = Date.now
     var reviewAt: Date?
-    var wantsReminder: Bool
-    var statusRaw: String
+    var wantsReminder: Bool = false
+    var statusRaw: String = "keeping"
     @Attribute(.externalStorage) var imageData: Data?
 
     init(

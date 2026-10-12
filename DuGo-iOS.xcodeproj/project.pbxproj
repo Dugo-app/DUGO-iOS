@@ -89,9 +89,9 @@
 		B11100000000000000000001 /* DuGoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuGoTheme.swift; sourceTree = "<group>"; };
 		B11100000000000000000002 /* DuGoFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuGoFont.swift; sourceTree = "<group>"; };
 		B11100000000000000000003 /* Colors.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Colors.xcassets; sourceTree = "<group>"; };
-		B11100000000000000000004 /* Pretendard-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pretendard-Regular.otf; sourceTree = "<group>"; };
-		B11100000000000000000005 /* Pretendard-Medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pretendard-Medium.otf; sourceTree = "<group>"; };
-		B11100000000000000000006 /* Pretendard-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Pretendard-SemiBold.otf; sourceTree = "<group>"; };
+		B11100000000000000000004 /* Pretendard-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Regular.otf"; sourceTree = "<group>"; };
+		B11100000000000000000005 /* Pretendard-Medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Medium.otf"; sourceTree = "<group>"; };
+		B11100000000000000000006 /* Pretendard-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-SemiBold.otf"; sourceTree = "<group>"; };
 		E3EB0B30305D80860017CC71 /* DuGo-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DuGo-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -277,6 +277,17 @@
 					};
 					E3EB0B2F305D80860017CC71 = {
 						CreatedOnToolsVersion = 26.1.1;
+						SystemCapabilities = {
+							com.apple.BackgroundModes = {
+								enabled = 1;
+							};
+							com.apple.Push = {
+								enabled = 1;
+							};
+							com.apple.iCloud = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -503,6 +514,7 @@
 		B10D00000000000000000002 /* Development */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APNS_ENVIRONMENT = development;
 				APP_DISPLAY_NAME = "두고dev";
 				APP_GROUP_IDENTIFIER = group.app.seungwon.dugo.dev;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconDev;
@@ -513,6 +525,7 @@
 				DEVELOPMENT_TEAM = V3BJC9KWRZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
+				ICLOUD_CONTAINER_IDENTIFIER = iCloud.app.seungwon.dugo.dev;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "두고dev";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
@@ -696,6 +709,7 @@
 		E3EB0B3C305D80870017CC71 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APNS_ENVIRONMENT = development;
 				APP_DISPLAY_NAME = "두고";
 				APP_GROUP_IDENTIFIER = group.app.seungwon.dugo;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -706,6 +720,7 @@
 				DEVELOPMENT_TEAM = V3BJC9KWRZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
+				ICLOUD_CONTAINER_IDENTIFIER = iCloud.app.seungwon.dugo;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "두고";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
@@ -740,6 +755,7 @@
 		E3EB0B3D305D80870017CC71 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APNS_ENVIRONMENT = production;
 				APP_DISPLAY_NAME = "두고";
 				APP_GROUP_IDENTIFIER = group.app.seungwon.dugo;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -750,6 +766,7 @@
 				DEVELOPMENT_TEAM = V3BJC9KWRZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
+				ICLOUD_CONTAINER_IDENTIFIER = iCloud.app.seungwon.dugo;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "두고";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";

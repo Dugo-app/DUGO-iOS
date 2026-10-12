@@ -18,6 +18,7 @@ enum WishCategory: String, CaseIterable {
 struct WishCategoryRepository {
     static let appGroupIdentifier = SharedLinkInbox.groupIdentifier
     static let storageKey = "wishCategories.v1"
+    private static let cloudMigrationKey = "wishCategories.cloudMigration.v1"
     static let defaultCategories = WishCategory.allCases.map(\.rawValue)
 
     private let defaults: UserDefaults
@@ -33,6 +34,18 @@ struct WishCategoryRepository {
 
         let categories = Self.normalized(saved)
         return categories.isEmpty ? [WishCategory.other.rawValue] : categories
+    }
+
+    var hasStoredCategories: Bool {
+        defaults.object(forKey: Self.storageKey) != nil
+    }
+
+    var hasMigratedToCloud: Bool {
+        defaults.bool(forKey: Self.cloudMigrationKey)
+    }
+
+    func markMigratedToCloud() {
+        defaults.set(true, forKey: Self.cloudMigrationKey)
     }
 
     func save(_ categories: [String]) {
