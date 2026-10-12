@@ -38,6 +38,17 @@ struct DuGo_iOSApp: App {
 
         if let identifier = CloudSyncConfiguration.containerIdentifier {
             do {
+                #if DEBUG
+                do {
+                    try CloudKitSchemaInitializer.initializeIfNeeded(
+                        storeURL: storeURL,
+                        containerIdentifier: identifier
+                    )
+                } catch {
+                    logger.error("CloudKit schema initialization failed: \(error.localizedDescription)")
+                }
+                #endif
+
                 let configuration = ModelConfiguration(
                     "DoGo",
                     schema: schema,
