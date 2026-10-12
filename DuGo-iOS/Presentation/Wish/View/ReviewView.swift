@@ -28,8 +28,10 @@ struct ReviewView: View {
         ) ?? .now
     @State private var wantsReminder = false
     @State private var completed: WishDecision?
+    @State private var undoToken: HomeViewModel.DecisionUndoToken?
     @State private var showsWaitSheet = false
     @State private var showsPurchaseConfirmation = false
+    @State private var isConfirmingAlreadyPurchased = false
     @State private var showsReleaseConfirmation = false
     @State private var isWaitingForPurchaseReturn = false
     @State private var didLeaveForPurchase = false
@@ -73,6 +75,7 @@ struct ReviewView: View {
             } else if phase == .active, isWaitingForPurchaseReturn, didLeaveForPurchase {
                 isWaitingForPurchaseReturn = false
                 didLeaveForPurchase = false
+                isConfirmingAlreadyPurchased = false
                 showsPurchaseConfirmation = true
             }
         }
@@ -307,15 +310,19 @@ struct ReviewView: View {
     private var purchaseConfirmationSheet: some View {
         DuGoActionSheet(
             height: .medium,
-            heading: "상품을 살펴보셨나요?",
-            message: "구매하기로 마음을 정했다면 선택을 남겨주세요\n아직 고민 중이어도 괜찮아요",
-            primaryTitle: "구매하기로 했어요",
+            heading: isConfirmingAlreadyPurchased ? "이미 구매하셨나요?" : "상품을 살펴보셨나요?",
+            message: isConfirmingAlreadyPurchased
+                ? "이미 구매한 상품이라면 선택을 남겨주세요"
+                : "구매하기로 마음을 정했다면 선택을 남겨주세요\n아직 고민 중이어도 괜찮아요",
+            primaryTitle: isConfirmingAlreadyPurchased ? "구매한 것으로 남기기" : "구매하기로 했어요",
             isLoading: viewModel.isWorking,
-            secondaryTitle: "조금 더 생각할래요"
+            secondaryTitle: isConfirmingAlreadyPurchased ? "취소" : "조금 더 생각할래요"
         ) {
             saveSelection(.purchase)
         } secondaryAction: {
-            decision = .wait
+            if !isConfirmingAlreadyPurchased {
+                decision = .wait
+            }
             showsPurchaseConfirmation = false
         } closeAction: {
             showsPurchaseConfirmation = false
@@ -396,11 +403,15 @@ struct ReviewView: View {
     }
 
     private var selectionFooter: some View {
-        DuGoPrimaryButton(
-            title: continueButtonTitle,
+        DuGoSheetActions(
+            primaryTitle: continueButtonTitle,
             isLoading: viewModel.isWorking,
-            action: continueSelection
-        )
+            secondaryTitle: decision == .purchase ? "이미 구매했어요" : nil
+        ) {
+            continueSelection()
+        } secondaryAction: {
+            confirmAlreadyPurchased()
+        }
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 8)
@@ -426,14 +437,21 @@ struct ReviewView: View {
 
             Spacer()
 
-            DuGoPrimaryButton(title: "완료") {
+            DuGoSheetActions(
+                primaryTitle: "완료",
+                isLoading: viewModel.isWorking,
+                secondaryTitle: undoToken == nil ? nil : "선택 되돌리기"
+            ) {
                 dismiss()
+            } secondaryAction: {
+                undoSelection()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 16)
         .padding(.top, 48)
         .padding(.bottom, 8)
+        .dugoErrorToast(message: $viewModel.errorMessage)
     }
 
     private func sectionTitle(_ title: String) -> some View {
@@ -479,6 +497,7 @@ struct ReviewView: View {
             return
         }
 
+        isConfirmingAlreadyPurchased = false
         didLeaveForPurchase = false
         isWaitingForPurchaseReturn = true
         openURL(url) { accepted in
@@ -488,6 +507,13 @@ struct ReviewView: View {
                 viewModel.errorMessage = "상품 링크를 열지 못했어요 다시 시도해주세요"
             }
         }
+    }
+
+    private func confirmAlreadyPurchased() {
+        guard decision == .purchase, !viewModel.isWorking else { return }
+        viewModel.errorMessage = nil
+        isConfirmingAlreadyPurchased = true
+        showsPurchaseConfirmation = true
     }
 
     private func decisionDescription(for decision: WishDecision) -> String {
@@ -510,7 +536,7 @@ struct ReviewView: View {
         let scheduledDate = decision == .wait && schedulesNextReview ? nextDate : nil
 
         Task {
-            if await viewModel.decide(
+            if let undoToken = await viewModel.decide(
                 item,
                 decision: decision,
                 feeling: "",
@@ -518,10 +544,25 @@ struct ReviewView: View {
                 nextDate: scheduledDate,
                 notify: scheduledDate != nil && wantsReminder
             ) {
+                self.undoToken = undoToken
                 pendingCompletion = decision
                 showsPurchaseConfirmation = false
                 showsWaitSheet = false
                 showsReleaseConfirmation = false
+            }
+        }
+    }
+
+    private func undoSelection() {
+        guard let undoToken else { return }
+
+        Task {
+            if await viewModel.undoDecision(undoToken) {
+                self.undoToken = nil
+                pendingCompletion = nil
+                completed = nil
+                decision = nil
+                showsSelectionFooter = false
             }
         }
     }
