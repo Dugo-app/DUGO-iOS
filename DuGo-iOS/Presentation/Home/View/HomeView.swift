@@ -91,6 +91,7 @@ struct HomeView: View {
             }
             .refreshable {
                 viewModel.resetFilters()
+                sortOrderRaw = HomeSortOrder.newest.rawValue
                 await viewModel.refresh()
             }
             .onChange(of: scrollToTopRequest) { _, _ in

@@ -375,7 +375,8 @@ struct SettingsView: View {
         isCheckingForUpdate = true
         Task {
             let didCheck = await versionMonitor.checkForUpdate(
-                ignoringDismissedVersion: true
+                ignoringDismissedVersion: true,
+                forceRefresh: true
             )
             isCheckingForUpdate = false
 

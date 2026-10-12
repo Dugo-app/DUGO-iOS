@@ -43,6 +43,12 @@ struct ForceUpdateGate<Content: View>: View {
             } message: {
                 Text(monitor.alertMessage)
             }
+            .onAppear {
+                monitor.startListeningForUpdates()
+            }
+            .onDisappear {
+                monitor.stopListeningForUpdates()
+            }
             .task {
                 await monitor.checkForUpdate()
             }
