@@ -23,26 +23,23 @@ struct WishDraft {
         ) ?? .now
     var wantsReminder = false
 
-    init(item: WishItem? = nil) {
-        guard let item else { return }
-        link = item.link
-        title = item.title
-        category = item.categoryRaw
-        price = item.price.map(String.init) ?? ""
-        reason = item.reason
-        imageData = item.imageData
-        hasReviewDate = item.reviewAt != nil
-        reviewDate = item.reviewAt ?? reviewDate
-        wantsReminder = item.wantsReminder
+    init() {}
+
+    var validURL: URL? {
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+            let scheme = url.scheme?.lowercased(),
+            ["http", "https"].contains(scheme),
+            let host = url.host,
+            !host.isEmpty
+        else { return nil }
+        return url
     }
 
     func validated(previousReviewDate: Date? = nil) throws -> (
         link: URL, title: String, price: Int?
     ) {
-        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(),
-            ["http", "https"].contains(scheme), let host = url.host, !host.isEmpty
-        else {
+        guard let url = validURL, let host = url.host else {
             throw DraftError.invalidLink
         }
         let amount =
@@ -63,6 +60,46 @@ struct WishDraft {
         }
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return (url, name.isEmpty ? host : name, parsedPrice)
+    }
+
+    mutating func preparePriceForEditing() {
+        price = price.filter(\.isNumber)
+    }
+
+    mutating func formatPrice() {
+        let digits = price.filter(\.isNumber)
+        guard !digits.isEmpty, let amount = Int(digits) else { return }
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.maximumFractionDigits = 0
+
+        if let formatted = formatter.string(from: NSNumber(value: amount)) {
+            price = "\(formatted)원"
+        }
+    }
+
+    mutating func fillImageIfMissing(_ data: Data?) -> Bool {
+        guard imageData == nil, let data else { return false }
+        imageData = data
+        return true
+    }
+
+    mutating func fillTitleIfEmpty(_ value: String?) -> Bool {
+        guard title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let value,
+            !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+        title = value
+        return true
+    }
+
+    mutating func fillPriceIfEmpty(_ amount: Int?) -> Bool {
+        guard price.isEmpty, let amount else { return false }
+        price = String(amount)
+        formatPrice()
+        return true
     }
 }
 

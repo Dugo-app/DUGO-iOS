@@ -11,7 +11,6 @@ import UIKit
 private struct DismissKeyboardOnBackgroundTapModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             .background {
                 KeyboardDismissTapInstaller()
                     .frame(width: 0, height: 0)

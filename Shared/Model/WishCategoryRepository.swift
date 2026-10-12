@@ -7,6 +7,14 @@
 
 import Foundation
 
+enum WishCategory: String, CaseIterable {
+    case digital = "디지털"
+    case fashion = "패션"
+    case living = "생활"
+    case hobby = "취미"
+    case other = "미분류"
+}
+
 struct WishCategoryRepository {
     static let appGroupIdentifier = SharedLinkInbox.groupIdentifier
     static let storageKey = "wishCategories.v1"

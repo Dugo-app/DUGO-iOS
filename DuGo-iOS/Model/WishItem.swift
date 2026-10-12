@@ -79,14 +79,6 @@ final class WishItem {
     }
 }
 
-enum WishCategory: String, CaseIterable {
-    case digital = "디지털"
-    case fashion = "패션"
-    case living = "생활"
-    case hobby = "취미"
-    case other = "미분류"
-}
-
 enum WishStatus: String {
     case keeping, purchased, released
     var title: String {
@@ -95,5 +87,22 @@ enum WishStatus: String {
         case .purchased: "구매하기로 했어요"
         case .released: "보내준 마음"
         }
+    }
+}
+
+extension WishDraft {
+    init(item: WishItem?) {
+        self.init()
+        guard let item else { return }
+
+        link = item.link
+        title = item.title
+        category = item.categoryRaw
+        price = item.price.map(String.init) ?? ""
+        reason = item.reason
+        imageData = item.imageData
+        hasReviewDate = item.reviewAt != nil
+        reviewDate = item.reviewAt ?? reviewDate
+        wantsReminder = item.wantsReminder
     }
 }

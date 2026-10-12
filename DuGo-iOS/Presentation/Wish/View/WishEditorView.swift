@@ -427,10 +427,7 @@ struct WishEditorView: View {
     private var toolbarContent: some ToolbarContent {
         if let onCancel {
             ToolbarItem(placement: .topBarLeading) {
-                Button(action: onCancel) {
-                    Text("취소")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
+                Button("취소", action: onCancel)
                 .tint(.duGoInk)
             }
         }
@@ -449,7 +446,6 @@ struct WishEditorView: View {
             } label: {
                 Text("저장")
                     .opacity(viewModel.isWorking || isSaving ? 0 : 1)
-                    .frame(minWidth: 44, minHeight: 44)
                     .overlay {
                         if viewModel.isWorking || isSaving {
                             ProgressView()
@@ -471,12 +467,7 @@ struct WishEditorView: View {
     }
 
     private var hasValidLink: Bool {
-        guard let url = URL(string: trimmedLink),
-            let scheme = url.scheme?.lowercased(),
-            ["http", "https"].contains(scheme),
-            let host = url.host, !host.isEmpty
-        else { return false }
-        return true
+        draft.validURL != nil
     }
 
     private var hasInvalidLink: Bool {
@@ -530,21 +521,11 @@ struct WishEditorView: View {
     }
 
     private func preparePriceForEditing() {
-        draft.price = draft.price.filter(\.isNumber)
+        draft.preparePriceForEditing()
     }
 
     private func formatPrice() {
-        let digits = draft.price.filter(\.isNumber)
-        guard !digits.isEmpty, let price = Int(digits) else { return }
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.maximumFractionDigits = 0
-
-        if let formattedPrice = formatter.string(from: NSNumber(value: price)) {
-            draft.price = "\(formattedPrice)원"
-        }
+        draft.formatPrice()
     }
 
     private func loadLinkPreview() async {
@@ -566,10 +547,11 @@ struct WishEditorView: View {
             try Task.checkCancellation()
             guard trimmedLink == link, !isSaving else { return }
 
-            if let imageData = preview.imageData {
+            if draft.imageData == nil, let imageData = preview.imageData {
                 withAnimation(revealAnimation) {
-                    draft.imageData = imageData
-                    autofilledFields.insert(.image)
+                    if draft.fillImageIfMissing(imageData) {
+                        autofilledFields.insert(.image)
+                    }
                 }
             }
 
@@ -580,13 +562,13 @@ struct WishEditorView: View {
             guard trimmedLink == link, !isSaving else { return }
 
             if draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                let title = preview.title,
-                !title.isEmpty
+                preview.title != nil
             {
                 withAnimation(revealAnimation) {
-                    draft.title = title
-                    automaticTitle = title
-                    autofilledFields.insert(.title)
+                    if draft.fillTitleIfEmpty(preview.title) {
+                        automaticTitle = draft.title
+                        autofilledFields.insert(.title)
+                    }
                 }
             }
 
@@ -598,10 +580,10 @@ struct WishEditorView: View {
 
             if draft.price.isEmpty, focusedField != .price, let price = preview.price {
                 withAnimation(revealAnimation) {
-                    draft.price = String(price)
-                    formatPrice()
-                    automaticPrice = draft.price
-                    autofilledFields.insert(.price)
+                    if draft.fillPriceIfEmpty(price) {
+                        automaticPrice = draft.price
+                        autofilledFields.insert(.price)
+                    }
                 }
             }
             previewedLink = link
