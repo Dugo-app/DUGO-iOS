@@ -12,6 +12,7 @@ struct HomeView: View {
     // MARK: - Properties
 
     @Query(sort: \WishItem.createdAt, order: .reverse) private var syncedItems: [WishItem]
+    @AppStorage("homeSortOrder") private var sortOrderRaw = HomeSortOrder.newest.rawValue
     @ObservedObject private var viewModel: HomeViewModel
     private let reminders: ReminderManager
     private let cloudSyncConfigured: Bool
@@ -30,6 +31,11 @@ struct HomeView: View {
                 && (query.isEmpty || item.title.localizedCaseInsensitiveContains(query)
                     || item.reason.localizedCaseInsensitiveContains(query))
         }
+        .sorted(by: isOrderedBefore)
+    }
+
+    private var sortOrder: HomeSortOrder {
+        HomeSortOrder(rawValue: sortOrderRaw) ?? .newest
     }
 
     private var reviewItems: [WishItem] {
@@ -85,6 +91,7 @@ struct HomeView: View {
             }
             .refreshable {
                 viewModel.resetFilters()
+                sortOrderRaw = HomeSortOrder.newest.rawValue
                 await viewModel.refresh()
             }
             .onChange(of: scrollToTopRequest) { _, _ in
@@ -156,6 +163,10 @@ struct HomeView: View {
                     .foregroundStyle(DuGoTheme.accent)
 
                 Spacer()
+
+                if !keptItems.isEmpty {
+                    sortMenu
+                }
             }
 
             searchField
@@ -200,6 +211,67 @@ struct HomeView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("정렬 기준", selection: $sortOrderRaw) {
+                ForEach(HomeSortOrder.allCases) { order in
+                    Text(order.title)
+                        .tag(order.rawValue)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(sortOrder.title)
+                
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .applyDuGoFont(.caption12Regular)
+            .foregroundStyle(DuGoTheme.secondary)
+        }
+        .accessibilityLabel("정렬 기준: \(sortOrder.title)")
+    }
+
+    // MARK: - Sorting
+
+    private func isOrderedBefore(_ lhs: WishItem, _ rhs: WishItem) -> Bool {
+        let comparison: Bool?
+
+        switch sortOrder {
+        case .newest:
+            comparison = compare(lhs.createdAt, rhs.createdAt, ascending: false)
+        case .oldest:
+            comparison = compare(lhs.createdAt, rhs.createdAt, ascending: true)
+        case .reviewDate:
+            comparison = compare(lhs.reviewAt, rhs.reviewAt, ascending: true)
+        case .priceLow:
+            comparison = compare(lhs.price, rhs.price, ascending: true)
+        case .priceHigh:
+            comparison = compare(lhs.price, rhs.price, ascending: false)
+        }
+
+        return comparison ?? compare(lhs.createdAt, rhs.createdAt, ascending: false)
+            ?? (lhs.id.uuidString < rhs.id.uuidString)
+    }
+
+    private func compare<Value: Comparable>(
+        _ lhs: Value?,
+        _ rhs: Value?,
+        ascending: Bool
+    ) -> Bool? {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return nil
+        case (.some, nil):
+            return true
+        case (nil, .some):
+            return false
+        case let (lhs?, rhs?):
+            guard lhs != rhs else { return nil }
+            return ascending ? lhs < rhs : lhs > rhs
         }
     }
 
@@ -276,5 +348,25 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 34)
+    }
+}
+
+private enum HomeSortOrder: String, CaseIterable, Identifiable {
+    case newest
+    case oldest
+    case reviewDate
+    case priceLow
+    case priceHigh
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .newest: "최근 담은 순"
+        case .oldest: "오래 담은 순"
+        case .reviewDate: "다시 볼 날짜순"
+        case .priceLow: "낮은 가격순"
+        case .priceHigh: "높은 가격순"
+        }
     }
 }

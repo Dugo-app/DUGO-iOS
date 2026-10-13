@@ -82,6 +82,14 @@ final class AppVersionMonitor: ObservableObject {
         static let appStoreURL = "app_store_url"
         static let requiredMessage = "force_update_message"
         static let optionalMessage = "optional_update_message"
+
+        static let updateKeys: Set<String> = [
+            minimumVersion,
+            latestVersion,
+            appStoreURL,
+            requiredMessage,
+            optionalMessage
+        ]
     }
 
     private enum CacheKey {
@@ -105,6 +113,7 @@ final class AppVersionMonitor: ObservableObject {
     private(set) var alertMessage = ""
     private var latestVersion: String?
     private var isChecking = false
+    private var configListener: ConfigUpdateListenerRegistration?
 
     private let logger = Logger(subsystem: "app.seungwon.dugo", category: "updates")
 
@@ -137,14 +146,17 @@ final class AppVersionMonitor: ObservableObject {
     // MARK: - Methods
 
     @discardableResult
-    func checkForUpdate(ignoringDismissedVersion: Bool = false) async -> Bool {
+    func checkForUpdate(
+        ignoringDismissedVersion: Bool = false,
+        forceRefresh: Bool = false
+    ) async -> Bool {
         guard !isChecking else { return false }
         guard let installedVersion = Self.installedVersion else { return false }
 
         isChecking = true
         defer { isChecking = false }
 
-        guard let policy = await fetchRemotePolicy() else { return false }
+        guard let policy = await fetchRemotePolicy(forceRefresh: forceRefresh) else { return false }
 
         if let remoteURL = policy.appStoreURL {
             cacheStoreURL(remoteURL)
@@ -158,6 +170,33 @@ final class AppVersionMonitor: ObservableObject {
             ignoringDismissedVersion: ignoringDismissedVersion
         )
         return true
+    }
+
+    func startListeningForUpdates() {
+        guard FirebaseConfigurator.isConfigured, configListener == nil else { return }
+
+        let remoteConfig = configuredRemoteConfig()
+        configListener = remoteConfig.addOnConfigUpdateListener { [weak self] update, error in
+            let errorMessage = error?.localizedDescription
+            let hasPolicyChange = update?.updatedKeys.isDisjoint(with: RemoteKey.updateKeys) == false
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+
+                if let errorMessage {
+                    self.logger.error("Remote Config listener failed: \(errorMessage)")
+                    return
+                }
+
+                guard hasPolicyChange else { return }
+                await self.activateRealtimePolicy()
+            }
+        }
+    }
+
+    func stopListeningForUpdates() {
+        configListener?.remove()
+        configListener = nil
     }
 
     func presentAlertIfNeeded() {
@@ -181,12 +220,34 @@ final class AppVersionMonitor: ObservableObject {
 
     // MARK: - Private Methods
 
-    private func fetchRemotePolicy() async -> UpdatePolicy? {
+    private func fetchRemotePolicy(forceRefresh: Bool) async -> UpdatePolicy? {
         guard FirebaseConfigurator.isConfigured else {
             logger.notice("Firebase is not configured; update policy check skipped")
             return nil
         }
 
+        let remoteConfig = configuredRemoteConfig()
+
+        do {
+            if forceRefresh {
+                let status = try await remoteConfig.fetch(withExpirationDuration: 0)
+                guard status == .success else {
+                    logger.error("Remote Config manual fetch did not succeed")
+                    return nil
+                }
+                try await remoteConfig.activate()
+            } else {
+                try await remoteConfig.fetchAndActivate()
+            }
+        } catch {
+            logger.error("Remote Config fetch failed: \(error.localizedDescription)")
+            if forceRefresh { return nil }
+        }
+
+        return policy(from: remoteConfig)
+    }
+
+    private func configuredRemoteConfig() -> RemoteConfig {
         let remoteConfig = RemoteConfig.remoteConfig()
         let settings = RemoteConfigSettings()
 
@@ -205,12 +266,10 @@ final class AppVersionMonitor: ObservableObject {
             RemoteKey.optionalMessage: DefaultValue.optionalMessage as NSObject
         ])
 
-        do {
-            try await remoteConfig.fetchAndActivate()
-        } catch {
-            logger.error("Remote Config fetch failed: \(error.localizedDescription)")
-        }
+        return remoteConfig
+    }
 
+    private func policy(from remoteConfig: RemoteConfig) -> UpdatePolicy? {
         let minimumString = remoteConfig[RemoteKey.minimumVersion].stringValue
         let latestString = remoteConfig[RemoteKey.latestVersion].stringValue
 
@@ -245,6 +304,32 @@ final class AppVersionMonitor: ObservableObject {
             requiredMessage: requiredMessage,
             optionalMessage: optionalMessage
         )
+    }
+
+    private func activateRealtimePolicy() async {
+        let remoteConfig = RemoteConfig.remoteConfig()
+
+        do {
+            try await remoteConfig.activate()
+        } catch {
+            logger.error("Remote Config activation failed: \(error.localizedDescription)")
+            return
+        }
+
+        guard
+            let installedVersion = Self.installedVersion,
+            let policy = policy(from: remoteConfig)
+        else {
+            return
+        }
+
+        if let remoteURL = policy.appStoreURL {
+            cacheStoreURL(remoteURL)
+        } else {
+            await refreshStoreURL()
+        }
+
+        apply(policy, to: installedVersion, ignoringDismissedVersion: false)
     }
 
     private func message(_ value: String, fallback: String) -> String {
