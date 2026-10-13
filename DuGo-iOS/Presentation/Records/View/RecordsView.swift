@@ -18,6 +18,15 @@ struct RecordsView: View {
         var id: WishDecision { decision }
     }
 
+    private struct RecordGroup: Identifiable {
+        let itemID: UUID
+        let records: [DecisionRecord]
+        let latest: DecisionRecord
+        let sortDate: Date
+
+        var id: UUID { itemID }
+    }
+
     // MARK: - Properties
 
     @ObservedObject private var viewModel: HomeViewModel
@@ -25,6 +34,7 @@ struct RecordsView: View {
     @State private var search = ""
     @State private var filter: WishDecision?
     @State private var selectedMonth: Date?
+    @State private var expandedItemIDs: Set<UUID> = []
     @State private var isSearchPresented = false
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -37,37 +47,46 @@ struct RecordsView: View {
 
     // MARK: - Computed Properties
 
-    private var latestRecords: [DecisionRecord] {
-        Dictionary(grouping: viewModel.records, by: \.itemID)
-            .values
-            .compactMap { records in
-                records.max { $0.createdAt < $1.createdAt }
-            }
-            .sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var filteredRecords: [DecisionRecord] {
+    private var filteredGroups: [RecordGroup] {
+        let calendar = Calendar.current
         let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        let records =
-            if let selectedMonth {
-                viewModel.records
-                    .filter {
-                        Calendar.current.isDate(
-                            $0.createdAt,
-                            equalTo: selectedMonth,
-                            toGranularity: .month
-                        )
-                    }
-                    .sorted { $0.createdAt > $1.createdAt }
-            } else {
-                latestRecords
-            }
 
-        return records.filter {
-            (filter == nil || $0.decision == filter)
-                && (text.isEmpty || $0.title.localizedCaseInsensitiveContains(text)
-                    || $0.note.localizedCaseInsensitiveContains(text))
-        }
+        return Dictionary(grouping: viewModel.records, by: \.itemID)
+            .compactMap { itemID, records -> RecordGroup? in
+                let ordered = records.sorted {
+                    if $0.createdAt == $1.createdAt {
+                        return $0.id.uuidString < $1.id.uuidString
+                    }
+                    return $0.createdAt < $1.createdAt
+                }
+                guard let latest = ordered.last else { return nil }
+                guard filter == nil || latest.decision == filter else { return nil }
+
+                let matching = ordered.filter { record in
+                    let matchesMonth = selectedMonth.map {
+                        calendar.isDate(record.createdAt, equalTo: $0, toGranularity: .month)
+                    } ?? true
+                    let matchesSearch = text.isEmpty
+                        || record.title.localizedCaseInsensitiveContains(text)
+                        || record.note.localizedCaseInsensitiveContains(text)
+
+                    return matchesMonth && matchesSearch
+                }
+                guard let lastMatch = matching.last else { return nil }
+
+                return RecordGroup(
+                    itemID: itemID,
+                    records: ordered,
+                    latest: latest,
+                    sortDate: lastMatch.createdAt
+                )
+            }
+            .sorted {
+                if $0.sortDate == $1.sortDate {
+                    return $0.itemID.uuidString < $1.itemID.uuidString
+                }
+                return $0.sortDate > $1.sortDate
+            }
     }
 
     private var availableMonths: [Date] {
@@ -311,21 +330,12 @@ struct RecordsView: View {
                         decisionSummary
                     }
 
-                    if filteredRecords.isEmpty {
+                    if filteredGroups.isEmpty {
                         emptyState
                             .frame(maxWidth: .infinity, minHeight: 260)
                     } else {
-                        ForEach(filteredRecords) { record in
-                            if let item = viewModel.item(id: record.itemID) {
-                                NavigationLink {
-                                    WishDetailView(item: item, viewModel: viewModel)
-                                } label: {
-                                    recordCard(record, item: item)
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                recordCard(record, item: nil)
-                            }
+                        ForEach(filteredGroups) { group in
+                            recordCard(group, item: viewModel.item(id: group.itemID))
                         }
                     }
                 }
@@ -426,14 +436,69 @@ struct RecordsView: View {
         }
     }
 
-    private func recordCard(_ record: DecisionRecord, item: WishItem?) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+    private func recordCard(_ group: RecordGroup, item: WishItem?) -> some View {
+        let isExpanded = expandedItemIDs.contains(group.itemID)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            if let item {
+                NavigationLink {
+                    WishDetailView(item: item, viewModel: viewModel)
+                } label: {
+                    recordHeader(group, item: item)
+                }
+                .buttonStyle(.plain)
+            } else {
+                recordHeader(group, item: nil)
+            }
+
+            HStack(spacing: 8) {
+                decisionTrail(group)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        if isExpanded {
+                            expandedItemIDs.remove(group.itemID)
+                        } else {
+                            expandedItemIDs.insert(group.itemID)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(DuGoTheme.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "선택 내역 접기" : "선택 내역 펼치기")
+            }
+            .padding(.top, 12)
+
+            if isExpanded {
+                Rectangle()
+                    .fill(DuGoTheme.border.opacity(0.65))
+                    .frame(height: 1)
+                    .padding(.vertical, 14)
+
+                expandedHistory(group)
+                    .transition(.opacity)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dugoRoundedSurface(cornerRadius: 18)
+        .contentShape(RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func recordHeader(_ group: RecordGroup, item: WishItem?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
             recordImage(for: item)
 
-            VStack(alignment: .leading, spacing: 2) {
-                decisionTag(record.decision)
-
-                Text(record.title)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item?.title ?? group.latest.title)
                     .applyDuGoFont(.title16Medium)
                     .foregroundStyle(DuGoTheme.ink)
                     .lineLimit(2)
@@ -441,15 +506,115 @@ struct RecordsView: View {
 
                 Spacer(minLength: 0)
 
-                Text(record.createdAt.dugoFormattedDate())
+                Text("최근 결정 · \(group.latest.createdAt.dugoFormattedDate())")
                     .applyDuGoFont(.caption12Regular)
-                    .foregroundStyle(.duGoSecondary)
+                    .foregroundStyle(DuGoTheme.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func decisionTrail(_ group: RecordGroup) -> some View {
+        let previous = Array(group.records.dropLast())
+        let visiblePrevious = Array(previous.suffix(3).reversed())
+        let hiddenCount = previous.count - visiblePrevious.count
+
+        return HStack(spacing: 6) {
+            decisionTag(group.latest.decision)
+
+            ForEach(visiblePrevious) { record in
+                trailArrow
+
+                compactDecisionIcon(record.decision)
+            }
+
+            if hiddenCount > 0 {
+                trailArrow
+
+                Text("+\(hiddenCount)")
+                    .applyDuGoFont(.caption12Medium)
+                    .foregroundStyle(DuGoTheme.secondary)
+                    .frame(minWidth: 26, minHeight: 26)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dugoRoundedSurface(cornerRadius: 18)
-        .contentShape(RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "최신 결정부터: "
+                + group.records.reversed().map(\.decision.rawValue).joined(separator: ", ")
+        )
+    }
+
+    private var trailArrow: some View {
+        Image(systemName: "chevron.left")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(DuGoTheme.secondary)
+            .accessibilityHidden(true)
+    }
+
+    private func compactDecisionIcon(_ decision: WishDecision) -> some View {
+        DuGoDecisionIcon(
+            decision: decision,
+            size: 14,
+            color: decisionColor(for: decision)
+        )
+        .frame(width: 26, height: 26)
+        .background {
+            Circle()
+                .fill(decisionColor(for: decision).opacity(0.10))
+        }
+    }
+
+    private func expandedHistory(_ group: RecordGroup) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("선택 내역")
+                    .applyDuGoFont(.body14Medium)
+                    .foregroundStyle(DuGoTheme.ink)
+
+                Spacer()
+
+                Text("\(group.records.count)번")
+                    .applyDuGoFont(.caption12Regular)
+                    .foregroundStyle(DuGoTheme.secondary)
+            }
+            .padding(.bottom, 8)
+
+            ForEach(Array(group.records.reversed())) { record in
+                HStack(alignment: .top, spacing: 10) {
+                    compactDecisionIcon(record.decision)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(record.decision.rawValue)
+                                .applyDuGoFont(.body14Medium)
+                                .foregroundStyle(DuGoTheme.ink)
+
+                            Spacer(minLength: 0)
+
+                            Text(record.createdAt.dugoFormattedDate())
+                                .applyDuGoFont(.caption12Regular)
+                                .foregroundStyle(DuGoTheme.secondary)
+                        }
+
+                        if !record.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(record.note)
+                                .applyDuGoFont(.caption14Regular)
+                                .foregroundStyle(DuGoTheme.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.vertical, 10)
+
+                if record.id != group.records.first?.id {
+                    Rectangle()
+                        .fill(DuGoTheme.border.opacity(0.65))
+                        .frame(height: 1)
+                }
+            }
+        }
     }
 
     private func recordImage(for item: WishItem?) -> some View {
@@ -462,7 +627,7 @@ struct RecordsView: View {
                 DuGoImagePlaceholder()
             }
         }
-        .frame(width: 90, height: 90)
+        .frame(width: 76, height: 76)
         .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
 
