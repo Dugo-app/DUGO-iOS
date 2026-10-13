@@ -86,69 +86,71 @@ struct RecordsView: View {
         .sorted(by: >)
     }
 
-    private var summaryMonth: Date {
-        selectedMonth ?? .now
+    private var summaryRecords: [DecisionRecord] {
+        guard let selectedMonth else { return viewModel.records }
+
+        let calendar = Calendar.current
+        return viewModel.records.filter {
+            calendar.isDate($0.createdAt, equalTo: selectedMonth, toGranularity: .month)
+        }
     }
 
-    private var monthlyDecisionCounts: [DecisionCount] {
-        let calendar = Calendar.current
-        let records = viewModel.records.filter {
-            calendar.isDate($0.createdAt, equalTo: summaryMonth, toGranularity: .month)
-        }
-
+    private var decisionCounts: [DecisionCount] {
         return WishDecision.allCases.map { decision in
             DecisionCount(
                 decision: decision,
-                count: records.count { $0.decision == decision }
+                count: summaryRecords.count { $0.decision == decision }
             )
         }
     }
 
-    private var activeMonthlyDecisionCounts: [DecisionCount] {
-        monthlyDecisionCounts.filter { $0.count > 0 }
+    private var activeDecisionCounts: [DecisionCount] {
+        decisionCounts.filter { $0.count > 0 }
     }
 
-    private var monthlyDecisionTotal: Int {
-        monthlyDecisionCounts.reduce(0) { $0 + $1.count }
+    private var decisionTotal: Int {
+        decisionCounts.reduce(0) { $0 + $1.count }
     }
 
-    private var mostFrequentMonthlyDecision: WishDecision? {
-        guard let highestCount = activeMonthlyDecisionCounts.map(\.count).max() else {
+    private var mostFrequentDecision: WishDecision? {
+        guard let highestCount = activeDecisionCounts.map(\.count).max() else {
             return nil
         }
 
-        let mostFrequent = activeMonthlyDecisionCounts.filter { $0.count == highestCount }
+        let mostFrequent = activeDecisionCounts.filter { $0.count == highestCount }
         return mostFrequent.count == 1 ? mostFrequent.first?.decision : nil
     }
 
     @ViewBuilder
-    private var monthlySummaryTitle: some View {
-        let month = Calendar.current.component(.month, from: summaryMonth)
+    private var decisionSummaryTitle: some View {
+        let period = selectedMonth.map {
+            "\(Calendar.current.component(.month, from: $0))월에는"
+        } ?? "지금까지"
 
-        if let decision = mostFrequentMonthlyDecision {
+        if let decision = mostFrequentDecision {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 5) {
-                    monthlySummaryText("\(month)월에는")
+                    summaryText(period)
                     decisionTag(decision)
-                    monthlySummaryText("를 가장 많이 선택했어요")
+                    summaryText("를 가장 많이 선택했어요")
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 5) {
-                        monthlySummaryText("\(month)월에는")
+                        summaryText(period)
                         decisionTag(decision)
-                        monthlySummaryText("를")
+                        summaryText("를")
                     }
 
-                    monthlySummaryText("가장 많이 선택했어요")
+                    summaryText("가장 많이 선택했어요")
                 }
             }
-        } else if monthlyDecisionTotal == 0 {
-            Text("\(month)월에는 아직 선택이 없어요")
+        } else if decisionTotal == 0 {
+            Text("\(period) 아직 선택이 없어요")
                 .applyDuGoFont(.title16Medium)
                 .foregroundStyle(DuGoTheme.ink)
         } else {
-            Text("\(month)월에는 \(monthlyDecisionTotal)번 마음을 정리했어요")
+            Text("\(period) \(decisionTotal)번 마음을 정리했어요")
                 .applyDuGoFont(.title16Medium)
                 .foregroundStyle(DuGoTheme.ink)
         }
@@ -306,7 +308,7 @@ struct RecordsView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if !viewModel.records.isEmpty {
-                        monthlySummary
+                        decisionSummary
                     }
 
                     if filteredRecords.isEmpty {
@@ -349,20 +351,20 @@ struct RecordsView: View {
         }
     }
 
-    private var monthlySummary: some View {
+    private var decisionSummary: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                monthlySummaryTitle
+                decisionSummaryTitle
 
                 Spacer()
             }
             .padding(.bottom, 10)
 
-            monthlyDecisionGraph
+            decisionGraph
 
-            if !activeMonthlyDecisionCounts.isEmpty {
+            if !activeDecisionCounts.isEmpty {
                 HStack(spacing: 12) {
-                    ForEach(activeMonthlyDecisionCounts) { summary in
+                    ForEach(activeDecisionCounts) { summary in
                         HStack(spacing: 4) {
                             Circle()
                                 .fill(decisionColor(for: summary.decision))
@@ -381,23 +383,23 @@ struct RecordsView: View {
         .dugoRoundedSurface(cornerRadius: 18)
     }
 
-    private var monthlyDecisionGraph: some View {
+    private var decisionGraph: some View {
         GeometryReader { geometry in
-            if monthlyDecisionTotal == 0 {
+            if decisionTotal == 0 {
                 Capsule()
                     .fill(DuGoTheme.border)
             } else {
-                let spacing = CGFloat(Swift.max(activeMonthlyDecisionCounts.count - 1, 0)) * 3
+                let spacing = CGFloat(Swift.max(activeDecisionCounts.count - 1, 0)) * 3
                 let availableWidth = Swift.max(geometry.size.width - spacing, 0)
 
                 HStack(spacing: 3) {
-                    ForEach(activeMonthlyDecisionCounts) { summary in
+                    ForEach(activeDecisionCounts) { summary in
                         Capsule()
                             .fill(decisionColor(for: summary.decision))
                             .frame(
                                 width: availableWidth
                                     * CGFloat(summary.count)
-                                    / CGFloat(monthlyDecisionTotal)
+                                    / CGFloat(decisionTotal)
                             )
                     }
                 }
@@ -480,7 +482,7 @@ struct RecordsView: View {
         )
     }
 
-    private func monthlySummaryText(_ text: String) -> some View {
+    private func summaryText(_ text: String) -> some View {
         Text(text)
             .applyDuGoFont(.title16Medium)
             .foregroundStyle(DuGoTheme.ink)
