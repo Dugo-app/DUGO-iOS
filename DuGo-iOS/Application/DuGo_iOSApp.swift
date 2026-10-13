@@ -5,6 +5,7 @@
 //  Created by 김승원 on 19/9/26.
 //
 
+import CoreData
 import OSLog
 import SwiftData
 import SwiftUI
@@ -109,6 +110,16 @@ struct DuGo_iOSApp: App {
                         }
                     }
                 }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: NSPersistentCloudKitContainer.eventChangedNotification
+                )
+            ) { notification in
+                guard let event = notification.userInfo?[
+                    NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+                ] as? NSPersistentCloudKitContainer.Event else { return }
+                CloudSyncMonitor.recordSuccessfulSync(event)
             }
         }
     }

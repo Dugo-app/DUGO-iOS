@@ -5,6 +5,7 @@
 //  Created by 김승원 on 8/10/26.
 //
 
+import CoreData
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -102,6 +103,16 @@ struct SettingsView: View {
                 await cloudSyncMonitor.refresh()
                 notificationTimeText = ReminderTimePreference.displayText
             }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSPersistentCloudKitContainer.eventChangedNotification
+            )
+        ) { notification in
+            guard let event = notification.userInfo?[
+                NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+            ] as? NSPersistentCloudKitContainer.Event else { return }
+            cloudSyncMonitor.record(event)
         }
         .sheet(isPresented: $isShowingNotificationTime) {
             notificationTimeSheet
@@ -204,7 +215,7 @@ struct SettingsView: View {
                 settingsRow(
                     title: "iCloud 동기화",
                     systemImage: "icloud",
-                    trailingText: cloudSyncMonitor.status.title
+                    trailingText: cloudSyncMonitor.statusLabel
                 )
             }
 

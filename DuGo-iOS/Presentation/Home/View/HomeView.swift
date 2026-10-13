@@ -229,8 +229,8 @@ struct HomeView: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .applyDuGoFont(.caption12Regular)
-            .foregroundStyle(DuGoTheme.secondary)
+            .applyDuGoFont(.body14Regular)
+            .foregroundStyle(DuGoTheme.secondary.opacity(0.7))
         }
         .accessibilityLabel("정렬 기준: \(sortOrder.title)")
     }
