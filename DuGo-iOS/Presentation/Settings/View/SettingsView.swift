@@ -40,6 +40,9 @@ struct SettingsView: View {
     @StateObject private var versionMonitor = AppVersionMonitor()
     @StateObject private var cloudSyncMonitor: CloudSyncMonitor
     @State private var notificationAuthorizationStatus: UNAuthorizationStatus?
+    @State private var notificationTimeText: String
+    @State private var draftNotificationTime: Date
+    @State private var isShowingNotificationTime = false
     @State private var isShowingOnboarding = false
     @State private var isCheckingForUpdate = false
     @State private var updateCheckAlert: UpdateCheckAlert?
@@ -57,6 +60,8 @@ struct SettingsView: View {
         _cloudSyncMonitor = StateObject(
             wrappedValue: CloudSyncMonitor(isConfigured: cloudSyncConfigured)
         )
+        _notificationTimeText = State(initialValue: ReminderTimePreference.displayText)
+        _draftNotificationTime = State(initialValue: ReminderTimePreference.date)
     }
 
     // MARK: - Body
@@ -88,13 +93,18 @@ struct SettingsView: View {
         .task {
             await refreshNotificationAuthorizationStatus()
             await cloudSyncMonitor.refresh()
+            notificationTimeText = ReminderTimePreference.displayText
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
                 await refreshNotificationAuthorizationStatus()
                 await cloudSyncMonitor.refresh()
+                notificationTimeText = ReminderTimePreference.displayText
             }
+        }
+        .sheet(isPresented: $isShowingNotificationTime) {
+            notificationTimeSheet
         }
         .fullScreenCover(isPresented: $isShowingOnboarding) {
             onboardingReplay
@@ -123,17 +133,68 @@ struct SettingsView: View {
 
     private var permissionSection: some View {
         settingsSection(title: "권한") {
-            Button {
-                manageNotificationPermission()
-            } label: {
-                settingsRow(
-                    title: "알림 설정",
-                    systemImage: "bell",
-                    trailingText: notificationPermissionStatusText,
-                    showsChevron: true
-                )
+            VStack(spacing: 0) {
+                Button {
+                    manageNotificationPermission()
+                } label: {
+                    settingsRow(
+                        title: "알림 설정",
+                        systemImage: "bell",
+                        trailingText: notificationPermissionStatusText,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                sectionDivider
+
+                Button {
+                    draftNotificationTime = ReminderTimePreference.date
+                    isShowingNotificationTime = true
+                } label: {
+                    settingsRow(
+                        title: "알림 시간",
+                        systemImage: "clock",
+                        trailingText: notificationTimeText,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+        }
+    }
+
+    private var notificationTimeSheet: some View {
+        DuGoSheet(
+            height: .medium,
+            closeAction: { isShowingNotificationTime = false }
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("알림 시간")
+                    .applyDuGoFont(.display24SemiBold)
+                    .foregroundStyle(DuGoTheme.ink)
+
+                Text("다시 볼 날에 알림을 받을 시간을 정해주세요")
+                    .applyDuGoFont(.body16Regular)
+                    .foregroundStyle(DuGoTheme.secondary)
+
+                DatePicker(
+                    "알림 시간",
+                    selection: $draftNotificationTime,
+                    displayedComponents: .hourAndMinute
+                )
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+                .dugoRoundedSurface()
+            }
+        } footer: {
+            DuGoSheetActions(primaryTitle: "저장") {
+                ReminderTimePreference.save(draftNotificationTime)
+                notificationTimeText = ReminderTimePreference.displayText
+                isShowingNotificationTime = false
+                Task { await viewModel.syncReminders() }
+            }
         }
     }
 

@@ -17,6 +17,47 @@ struct WishReminder {
     let date: Date
 }
 
+enum ReminderTimePreference {
+    // MARK: - Properties
+
+    private static let key = "reviewReminderMinuteOfDay"
+    private static let defaultMinuteOfDay = 13 * 60
+
+    static var minuteOfDay: Int {
+        let defaults = UserDefaults(suiteName: SharedLinkInbox.groupIdentifier) ?? .standard
+        guard defaults.object(forKey: key) != nil else { return defaultMinuteOfDay }
+        return min(max(defaults.integer(forKey: key), 0), 23 * 60 + 59)
+    }
+
+    static var date: Date {
+        let selectedMinutes = minuteOfDay
+        return Calendar.current.date(
+            bySettingHour: selectedMinutes / 60,
+            minute: selectedMinutes % 60,
+            second: 0,
+            of: .now
+        ) ?? .now
+    }
+
+    static var displayText: String {
+        let selectedMinutes = minuteOfDay
+        let hour = selectedMinutes / 60
+        let minute = selectedMinutes % 60
+        let period = hour < 12 ? "오전" : "오후"
+        let hour12 = hour % 12 == 0 ? 12 : hour % 12
+        return minute == 0 ? "\(period) \(hour12)시" : "\(period) \(hour12)시 \(minute)분"
+    }
+
+    // MARK: - Methods
+
+    static func save(_ date: Date) {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let minutes = (components.hour ?? 13) * 60 + (components.minute ?? 0)
+        let defaults = UserDefaults(suiteName: SharedLinkInbox.groupIdentifier) ?? .standard
+        defaults.set(minutes, forKey: key)
+    }
+}
+
 @MainActor
 final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     // MARK: - Properties
@@ -27,7 +68,6 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
     private(set) var notice: String?
     private var queue: Task<Void, Never>?
     private var center: UNUserNotificationCenter { .current() }
-    private let notificationHour = 13
     private let notificationIdentifierPrefix = "dugo.review."
     private let groupedNotificationIdentifierPrefix = "dugo.review.group."
 
@@ -290,9 +330,10 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
     }
 
     private func notificationDate(for reviewDate: Date) -> Date {
-        Calendar.current.date(
-            bySettingHour: notificationHour,
-            minute: 0,
+        let minuteOfDay = ReminderTimePreference.minuteOfDay
+        return Calendar.current.date(
+            bySettingHour: minuteOfDay / 60,
+            minute: minuteOfDay % 60,
             second: 0,
             of: reviewDate
         ) ?? reviewDate
