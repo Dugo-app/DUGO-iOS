@@ -297,7 +297,7 @@ struct WishEditorView: View {
             }
 
             if draft.hasReviewDate && draft.wantsReminder {
-                Text("선택한 날 오후 1시에 알림을 보내드려요")
+                Text("선택한 날 \(ReminderTimePreference.displayText)에 알림을 보내드려요")
                     .applyDuGoFont(.caption12Regular)
                     .foregroundStyle(DuGoTheme.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

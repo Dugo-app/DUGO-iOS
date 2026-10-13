@@ -7,6 +7,7 @@
 
 import CloudKit
 import Combine
+import CoreData
 import Foundation
 
 enum CloudSyncConfiguration {
@@ -60,18 +61,31 @@ final class CloudSyncMonitor: ObservableObject {
     // MARK: - Properties
 
     @Published private(set) var status: Status
+    @Published private(set) var lastSyncAt: Date?
     private let isConfigured: Bool
+    private static let lastSyncKey = "lastSuccessfulCloudSyncAt"
+
+    var statusLabel: String {
+        guard case .available = status else { return status.title }
+        guard let lastSyncAt else { return "기록 없음" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy.MM.dd HH:mm"
+        return formatter.string(from: lastSyncAt)
+    }
 
     // MARK: - Initializer
 
     init(isConfigured: Bool) {
         self.isConfigured = isConfigured
         status = isConfigured ? .checking : .notConfigured
+        lastSyncAt = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
     }
 
     // MARK: - Methods
 
     func refresh() async {
+        lastSyncAt = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
         guard isConfigured, let identifier = CloudSyncConfiguration.containerIdentifier else {
             status = .notConfigured
             return
@@ -95,5 +109,26 @@ final class CloudSyncMonitor: ObservableObject {
         @unknown default:
             status = .unavailable
         }
+    }
+
+    func record(_ event: NSPersistentCloudKitContainer.Event) {
+        guard let date = Self.recordSuccessfulSync(event) else { return }
+        if date > (lastSyncAt ?? .distantPast) {
+            lastSyncAt = date
+        }
+    }
+
+    @discardableResult
+    static func recordSuccessfulSync(_ event: NSPersistentCloudKitContainer.Event) -> Date? {
+        guard event.type == .import || event.type == .export,
+            event.succeeded,
+            let endDate = event.endDate
+        else { return nil }
+
+        let previous = UserDefaults.standard.object(forKey: lastSyncKey) as? Date
+        if endDate > (previous ?? .distantPast) {
+            UserDefaults.standard.set(endDate, forKey: lastSyncKey)
+        }
+        return endDate
     }
 }
