@@ -11,22 +11,50 @@ import SwiftUI
 struct HomeView: View {
     // MARK: - Properties
 
+    @Query(sort: \WishItem.createdAt, order: .reverse) private var syncedItems: [WishItem]
+    @AppStorage("homeSortOrder") private var sortOrderRaw = HomeSortOrder.newest.rawValue
     @ObservedObject private var viewModel: HomeViewModel
     private let reminders: ReminderManager
+    private let cloudSyncConfigured: Bool
     private let onAddTapped: () -> Void
     private let scrollToTopRequest: Int
     @State private var openingMessage: String
+
+    private var keptItems: [WishItem] {
+        syncedItems.filter { $0.status == .keeping }
+    }
+
+    private var filteredItems: [WishItem] {
+        let query = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return keptItems.filter { item in
+            (viewModel.selectedCategory == nil || item.categoryRaw == viewModel.selectedCategory)
+                && (query.isEmpty || item.title.localizedCaseInsensitiveContains(query)
+                    || item.reason.localizedCaseInsensitiveContains(query))
+        }
+        .sorted(by: isOrderedBefore)
+    }
+
+    private var sortOrder: HomeSortOrder {
+        HomeSortOrder(rawValue: sortOrderRaw) ?? .newest
+    }
+
+    private var reviewItems: [WishItem] {
+        keptItems.filter { $0.reviewAt.map { $0 <= .now } ?? false }
+            .sorted { ($0.reviewAt ?? .distantFuture) < ($1.reviewAt ?? .distantFuture) }
+    }
 
     // MARK: - Initializer
 
     init(
         viewModel: HomeViewModel,
         reminders: ReminderManager,
+        cloudSyncConfigured: Bool,
         onAddTapped: @escaping () -> Void,
         scrollToTopRequest: Int = 0
     ) {
         self.viewModel = viewModel
         self.reminders = reminders
+        self.cloudSyncConfigured = cloudSyncConfigured
         self.onAddTapped = onAddTapped
         self.scrollToTopRequest = scrollToTopRequest
         _openingMessage = State(initialValue: DuGoGreeting.randomOpeningMessage)
@@ -48,7 +76,7 @@ struct HomeView: View {
                             .background(DuGoTheme.surface, in: RoundedRectangle(cornerRadius: 18))
                     }
 
-                    if !viewModel.reviewItems.isEmpty {
+                    if !reviewItems.isEmpty {
                         reviewSection
                     }
 
@@ -63,6 +91,7 @@ struct HomeView: View {
             }
             .refreshable {
                 viewModel.resetFilters()
+                sortOrderRaw = HomeSortOrder.newest.rawValue
                 await viewModel.refresh()
             }
             .onChange(of: scrollToTopRequest) { _, _ in
@@ -90,7 +119,8 @@ struct HomeView: View {
             NavigationLink {
                 SettingsView(
                     viewModel: viewModel,
-                    reminders: reminders
+                    reminders: reminders,
+                    cloudSyncConfigured: cloudSyncConfigured
                 )
             } label: {
                 Image(systemName: "gearshape")
@@ -117,7 +147,7 @@ struct HomeView: View {
                 .applyDuGoFont(.body14Regular)
                 .foregroundStyle(DuGoTheme.secondary)
 
-            ReviewCarouselView(items: viewModel.reviewItems, viewModel: viewModel)
+            ReviewCarouselView(items: reviewItems, viewModel: viewModel)
         }
     }
 
@@ -128,18 +158,22 @@ struct HomeView: View {
                     .applyDuGoFont(.body14Regular)
                     .foregroundStyle(DuGoTheme.secondary)
 
-                Text("\(viewModel.keptItems.count)")
+                Text("\(keptItems.count)")
                     .applyDuGoFont(.body14Medium)
                     .foregroundStyle(DuGoTheme.accent)
 
                 Spacer()
+
+                if !keptItems.isEmpty {
+                    sortMenu
+                }
             }
 
             searchField
 
             categories
 
-            if viewModel.keptItems.isEmpty {
+            if keptItems.isEmpty {
                 emptyCollection(
                     title: "마음을 담아보세요",
                     message: "사고 싶은 물건의 링크만 있어도 괜찮아요",
@@ -147,7 +181,7 @@ struct HomeView: View {
                 ) {
                     onAddTapped()
                 }
-            } else if viewModel.filteredItems.isEmpty {
+            } else if filteredItems.isEmpty {
                 emptyCollection(
                     title: "찾는 마음이 없어요",
                     message: "다른 검색어나 카테고리로 살펴보세요",
@@ -161,16 +195,83 @@ struct HomeView: View {
                     horizontalSpacing: 12,
                     verticalSpacing: 16
                 ) {
-                    ForEach(viewModel.filteredItems) { item in
+                    ForEach(filteredItems) { item in
                         NavigationLink {
                             WishDetailView(item: item, viewModel: viewModel)
                         } label: {
-                            WishCardView(item: item)
+                            WishCardView(
+                                item: item,
+                                title: item.title,
+                                price: item.price,
+                                categoryRaw: item.categoryRaw,
+                                storedDescription: item.storedDescription
+                            )
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("정렬 기준", selection: $sortOrderRaw) {
+                ForEach(HomeSortOrder.allCases) { order in
+                    Text(order.title)
+                        .tag(order.rawValue)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(sortOrder.title)
+                
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .applyDuGoFont(.body14Regular)
+            .foregroundStyle(DuGoTheme.secondary.opacity(0.7))
+        }
+        .accessibilityLabel("정렬 기준: \(sortOrder.title)")
+    }
+
+    // MARK: - Sorting
+
+    private func isOrderedBefore(_ lhs: WishItem, _ rhs: WishItem) -> Bool {
+        let comparison: Bool?
+
+        switch sortOrder {
+        case .newest:
+            comparison = compare(lhs.createdAt, rhs.createdAt, ascending: false)
+        case .oldest:
+            comparison = compare(lhs.createdAt, rhs.createdAt, ascending: true)
+        case .reviewDate:
+            comparison = compare(lhs.reviewAt, rhs.reviewAt, ascending: true)
+        case .priceLow:
+            comparison = compare(lhs.price, rhs.price, ascending: true)
+        case .priceHigh:
+            comparison = compare(lhs.price, rhs.price, ascending: false)
+        }
+
+        return comparison ?? compare(lhs.createdAt, rhs.createdAt, ascending: false)
+            ?? (lhs.id.uuidString < rhs.id.uuidString)
+    }
+
+    private func compare<Value: Comparable>(
+        _ lhs: Value?,
+        _ rhs: Value?,
+        ascending: Bool
+    ) -> Bool? {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return nil
+        case (.some, nil):
+            return true
+        case (nil, .some):
+            return false
+        case let (lhs?, rhs?):
+            guard lhs != rhs else { return nil }
+            return ascending ? lhs < rhs : lhs > rhs
         }
     }
 
@@ -247,5 +348,25 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 34)
+    }
+}
+
+private enum HomeSortOrder: String, CaseIterable, Identifiable {
+    case newest
+    case oldest
+    case reviewDate
+    case priceLow
+    case priceHigh
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .newest: "최근 담은 순"
+        case .oldest: "오래 담은 순"
+        case .reviewDate: "다시 볼 날짜순"
+        case .priceLow: "낮은 가격순"
+        case .priceHigh: "높은 가격순"
+        }
     }
 }

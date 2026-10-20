@@ -5,6 +5,7 @@
 //  Created by 김승원 on 8/10/26.
 //
 
+import CoreData
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -32,22 +33,17 @@ struct SettingsView: View {
         }
     }
 
-    private enum SettingsURL {
-        static let shareHelp = URL(
-            string: "https://hail-anger-c0a.notion.site/3f6d2ca4eb7c8061ba15f28fa6c86853"
-        )!
-        static let privacyPolicy = URL(
-            string: "https://hail-anger-c0a.notion.site/3eed2ca4eb7c8052a25cefcbbb9cf116?pvs=74"
-        )!
-    }
-
     // MARK: - Properties
 
     @ObservedObject private var viewModel: HomeViewModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @StateObject private var versionMonitor = AppVersionMonitor()
+    @StateObject private var cloudSyncMonitor: CloudSyncMonitor
     @State private var notificationAuthorizationStatus: UNAuthorizationStatus?
+    @State private var notificationTimeText: String
+    @State private var draftNotificationTime: Date
+    @State private var isShowingNotificationTime = false
     @State private var isShowingOnboarding = false
     @State private var isCheckingForUpdate = false
     @State private var updateCheckAlert: UpdateCheckAlert?
@@ -57,10 +53,16 @@ struct SettingsView: View {
 
     init(
         viewModel: HomeViewModel,
-        reminders: ReminderManager
+        reminders: ReminderManager,
+        cloudSyncConfigured: Bool
     ) {
         self.viewModel = viewModel
         self.reminders = reminders
+        _cloudSyncMonitor = StateObject(
+            wrappedValue: CloudSyncMonitor(isConfigured: cloudSyncConfigured)
+        )
+        _notificationTimeText = State(initialValue: ReminderTimePreference.displayText)
+        _draftNotificationTime = State(initialValue: ReminderTimePreference.date)
     }
 
     // MARK: - Body
@@ -69,6 +71,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 managementSection
+
+                dataSection
 
                 permissionSection
 
@@ -89,12 +93,29 @@ struct SettingsView: View {
         .dugoScreen()
         .task {
             await refreshNotificationAuthorizationStatus()
+            await cloudSyncMonitor.refresh()
+            notificationTimeText = ReminderTimePreference.displayText
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
                 await refreshNotificationAuthorizationStatus()
+                await cloudSyncMonitor.refresh()
+                notificationTimeText = ReminderTimePreference.displayText
             }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSPersistentCloudKitContainer.eventChangedNotification
+            )
+        ) { notification in
+            guard let event = notification.userInfo?[
+                NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+            ] as? NSPersistentCloudKitContainer.Event else { return }
+            cloudSyncMonitor.record(event)
+        }
+        .sheet(isPresented: $isShowingNotificationTime) {
+            notificationTimeSheet
         }
         .fullScreenCover(isPresented: $isShowingOnboarding) {
             onboardingReplay
@@ -123,17 +144,85 @@ struct SettingsView: View {
 
     private var permissionSection: some View {
         settingsSection(title: "권한") {
-            Button {
-                manageNotificationPermission()
-            } label: {
+            VStack(spacing: 0) {
+                Button {
+                    manageNotificationPermission()
+                } label: {
+                    settingsRow(
+                        title: "알림 설정",
+                        systemImage: "bell",
+                        trailingText: notificationPermissionStatusText,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                sectionDivider
+
+                Button {
+                    draftNotificationTime = ReminderTimePreference.date
+                    isShowingNotificationTime = true
+                } label: {
+                    settingsRow(
+                        title: "알림 시간",
+                        systemImage: "clock",
+                        trailingText: notificationTimeText,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var notificationTimeSheet: some View {
+        DuGoSheet(
+            height: .medium,
+            closeAction: { isShowingNotificationTime = false }
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("알림 시간")
+                    .applyDuGoFont(.display24SemiBold)
+                    .foregroundStyle(DuGoTheme.ink)
+
+                Text("다시 볼 날에 알림을 받을 시간을 정해주세요")
+                    .applyDuGoFont(.body16Regular)
+                    .foregroundStyle(DuGoTheme.secondary)
+
+                DatePicker(
+                    "알림 시간",
+                    selection: $draftNotificationTime,
+                    displayedComponents: .hourAndMinute
+                )
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+                .dugoRoundedSurface()
+            }
+        } footer: {
+            DuGoSheetActions(primaryTitle: "저장") {
+                ReminderTimePreference.save(draftNotificationTime)
+                notificationTimeText = ReminderTimePreference.displayText
+                isShowingNotificationTime = false
+                Task { await viewModel.syncReminders() }
+            }
+        }
+    }
+
+    private var dataSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            settingsSection(title: "데이터") {
                 settingsRow(
-                    title: "알림 설정",
-                    systemImage: "bell",
-                    trailingText: notificationPermissionStatusText,
-                    showsChevron: true
+                    title: "iCloud 동기화",
+                    systemImage: "icloud",
+                    trailingText: cloudSyncMonitor.statusLabel
                 )
             }
-            .buttonStyle(.plain)
+
+            Text(cloudSyncMonitor.status.description)
+                .applyDuGoFont(.caption12Regular)
+                .foregroundStyle(DuGoTheme.secondary)
+                .padding(.horizontal, 4)
         }
     }
 
@@ -143,7 +232,7 @@ struct SettingsView: View {
                 NavigationLink {
                     WebDocumentView(
                         title: "공유하기로 마음 담기",
-                        url: SettingsURL.shareHelp
+                        url: AppEnvironment.shareHelpURL
                     )
                 } label: {
                     settingsRow(
@@ -224,7 +313,7 @@ struct SettingsView: View {
                 NavigationLink {
                     WebDocumentView(
                         title: "개인정보 처리방침",
-                        url: SettingsURL.privacyPolicy
+                        url: AppEnvironment.privacyPolicyURL
                     )
                 } label: {
                     settingsRow(
@@ -358,7 +447,8 @@ struct SettingsView: View {
         isCheckingForUpdate = true
         Task {
             let didCheck = await versionMonitor.checkForUpdate(
-                ignoringDismissedVersion: true
+                ignoringDismissedVersion: true,
+                forceRefresh: true
             )
             isCheckingForUpdate = false
 

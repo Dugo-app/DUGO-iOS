@@ -410,7 +410,7 @@ struct OnboardingView: View {
 
                     Spacer()
 
-                    Text("오후 1시")
+                    Text(ReminderTimePreference.displayText)
                         .applyDuGoFont(.caption12Regular)
                         .foregroundStyle(DuGoTheme.secondary)
                 }

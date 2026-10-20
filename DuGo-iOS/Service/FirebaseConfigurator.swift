@@ -27,19 +27,20 @@ enum FirebaseConfigurator {
             return
         }
 
-#if DUGO_DEV
-        let resourceName = "GoogleService-Info-Dev"
-#else
-        let resourceName = "GoogleService-Info"
-#endif
-
-        guard
-            let path = Bundle.main.path(forResource: resourceName, ofType: "plist"),
-            let options = FirebaseOptions(contentsOfFile: path)
-        else {
-            logger.notice("\(resourceName).plist was not found")
+        let configuration = AppEnvironment.firebase
+        guard configuration.bundleID == Bundle.main.bundleIdentifier else {
+            logger.error("Firebase configuration bundle ID does not match the app")
             return
         }
+
+        let options = FirebaseOptions(
+            googleAppID: configuration.googleAppID,
+            gcmSenderID: configuration.gcmSenderID
+        )
+        options.apiKey = configuration.apiKey
+        options.projectID = configuration.projectID
+        options.bundleID = configuration.bundleID
+        options.storageBucket = configuration.storageBucket
 
         FirebaseApp.configure(options: options)
         isConfigured = true

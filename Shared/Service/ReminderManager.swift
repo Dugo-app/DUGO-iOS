@@ -17,6 +17,47 @@ struct WishReminder {
     let date: Date
 }
 
+enum ReminderTimePreference {
+    // MARK: - Properties
+
+    private static let key = "reviewReminderMinuteOfDay"
+    private static let defaultMinuteOfDay = 13 * 60
+
+    static var minuteOfDay: Int {
+        let defaults = UserDefaults(suiteName: SharedLinkInbox.groupIdentifier) ?? .standard
+        guard defaults.object(forKey: key) != nil else { return defaultMinuteOfDay }
+        return min(max(defaults.integer(forKey: key), 0), 23 * 60 + 59)
+    }
+
+    static var date: Date {
+        let selectedMinutes = minuteOfDay
+        return Calendar.current.date(
+            bySettingHour: selectedMinutes / 60,
+            minute: selectedMinutes % 60,
+            second: 0,
+            of: .now
+        ) ?? .now
+    }
+
+    static var displayText: String {
+        let selectedMinutes = minuteOfDay
+        let hour = selectedMinutes / 60
+        let minute = selectedMinutes % 60
+        let period = hour < 12 ? "오전" : "오후"
+        let hour12 = hour % 12 == 0 ? 12 : hour % 12
+        return minute == 0 ? "\(period) \(hour12)시" : "\(period) \(hour12)시 \(minute)분"
+    }
+
+    // MARK: - Methods
+
+    static func save(_ date: Date) {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let minutes = (components.hour ?? 13) * 60 + (components.minute ?? 0)
+        let defaults = UserDefaults(suiteName: SharedLinkInbox.groupIdentifier) ?? .standard
+        defaults.set(minutes, forKey: key)
+    }
+}
+
 @MainActor
 final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     // MARK: - Properties
@@ -27,7 +68,6 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
     private(set) var notice: String?
     private var queue: Task<Void, Never>?
     private var center: UNUserNotificationCenter { .current() }
-    private let notificationHour = 13
     private let notificationIdentifierPrefix = "dugo.review."
     private let groupedNotificationIdentifierPrefix = "dugo.review.group."
 
@@ -51,6 +91,16 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
         let task = Task { @MainActor in
             await previous?.value
             await self.performSync(reminders)
+        }
+        queue = task
+        await task.value
+    }
+
+    func synchronizeAdditional(_ reminders: [WishReminder]) async {
+        let previous = queue
+        let task = Task { @MainActor in
+            await previous?.value
+            await self.performAdditionalSync(reminders)
         }
         queue = task
         await task.value
@@ -97,31 +147,89 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
             notice = "가까운 일정 60개까지 알림을 예약했어요 앱을 열 때 다음 일정을 갱신해요"
         }
         for group in selected {
-            let components = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute, .second],
-                from: group.date
-            )
-            let content = notificationContent(for: group)
-            if let existing = pending.first(where: { $0.identifier == group.identifier }),
-                let trigger = existing.trigger as? UNCalendarNotificationTrigger,
-                trigger.dateComponents == components,
-                existing.content.title == content.title,
-                existing.content.body == content.body,
-                reminderIDs(from: existing.content) == Set(group.reminders.map(\.itemID))
-            {
-                continue
-            }
-            let request = UNNotificationRequest(
-                identifier: group.identifier,
-                content: content,
-                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            )
-            do {
-                try await center.add(request)
-            } catch {
+            let existing = pending.first { $0.identifier == group.identifier }
+            if !(await schedule(group, replacing: existing)) {
                 notice = "알림을 예약하지 못했어요"
             }
         }
+        await updateScheduledIDs()
+    }
+
+    private func performAdditionalSync(_ additions: [WishReminder]) async {
+        let settings = await center.notificationSettings()
+        guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
+            notice = "알림 권한이 꺼져 있어요"
+            return
+        }
+
+        let pending = await center.pendingNotificationRequests()
+        let groups = groupedReminders(from: additions).filter { $0.date > .now }
+        var scheduledGroupCount = pending.filter {
+            $0.identifier.hasPrefix(notificationIdentifierPrefix)
+        }.count
+        notice = nil
+
+        for group in groups {
+            let existing = pending.first { $0.identifier == group.identifier }
+            if existing == nil, scheduledGroupCount >= 60 {
+                notice = "가까운 일정 60개까지 알림을 예약했어요 앱을 열 때 다음 일정을 갱신해요"
+                continue
+            }
+
+            var combined = existing.map { reminders(from: $0, on: group.date) } ?? []
+            let addedIDs = Set(group.reminders.map(\.itemID))
+            combined.removeAll { addedIDs.contains($0.itemID) }
+            combined.append(contentsOf: group.reminders)
+
+            let updatedGroup = ReminderGroup(
+                date: group.date,
+                identifier: group.identifier,
+                reminders: combined
+            )
+            if !(await schedule(updatedGroup, replacing: existing)) {
+                notice = "알림을 예약하지 못했어요"
+            } else if existing == nil {
+                scheduledGroupCount += 1
+            }
+        }
+        await updateScheduledIDs()
+    }
+
+    private func schedule(
+        _ group: ReminderGroup,
+        replacing existing: UNNotificationRequest?
+    ) async -> Bool {
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: group.date
+        )
+        let content = notificationContent(for: group)
+        let expectedTitles = group.reminders.map { notificationTitle(from: $0.title) }
+        if let existing,
+            let trigger = existing.trigger as? UNCalendarNotificationTrigger,
+            trigger.dateComponents == components,
+            existing.content.title == content.title,
+            existing.content.body == content.body,
+            reminderIDs(from: existing.content) == Set(group.reminders.map(\.itemID)),
+            existing.content.userInfo["wishTitles"] as? [String] == expectedTitles
+        {
+            return true
+        }
+
+        let request = UNNotificationRequest(
+            identifier: group.identifier,
+            content: content,
+            trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        )
+        do {
+            try await center.add(request)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func updateScheduledIDs() async {
         let actual = await center.pendingNotificationRequests()
         scheduledIDs = Set(
             actual
@@ -152,12 +260,16 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
         if additionalCount == 0 {
             content.title = "다시 볼 마음이 있어요"
             content.body = "“\(representativeTitle)”을 다시 살펴볼 시간이에요"
-            content.userInfo = ["wishID": group.reminders[0].itemID.uuidString]
+            content.userInfo = [
+                "wishID": group.reminders[0].itemID.uuidString,
+                "wishTitles": group.reminders.map { notificationTitle(from: $0.title) },
+            ]
         } else {
             content.title = "오늘 다시 볼 마음이 \(group.reminders.count)개 있어요"
             content.body = "\(representativeTitle) 외 \(additionalCount)개를 천천히 살펴보세요"
             content.userInfo = [
-                "wishIDs": group.reminders.map { $0.itemID.uuidString }
+                "wishIDs": group.reminders.map { $0.itemID.uuidString },
+                "wishTitles": group.reminders.map { notificationTitle(from: $0.title) },
             ]
         }
         return content
@@ -187,6 +299,30 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
         return []
     }
 
+    private func reminders(from request: UNNotificationRequest, on date: Date) -> [WishReminder] {
+        let userInfo = request.content.userInfo
+        let identifiers = (userInfo["wishIDs"] as? [String])
+            ?? (userInfo["wishID"] as? String).map { [$0] }
+            ?? []
+        let titles = userInfo["wishTitles"] as? [String] ?? []
+        let fallbackTitle = legacyTitle(from: request.content.body)
+
+        return identifiers.enumerated().compactMap { index, identifier in
+            guard let id = UUID(uuidString: identifier) else { return nil }
+            let title = titles.indices.contains(index) ? titles[index] : fallbackTitle
+            return WishReminder(itemID: id, title: title, date: date)
+        }
+    }
+
+    private func legacyTitle(from body: String) -> String {
+        if let start = body.firstIndex(of: "“"),
+            let end = body[start...].firstIndex(of: "”")
+        {
+            return String(body[body.index(after: start)..<end])
+        }
+        return body.components(separatedBy: " 외 ").first ?? "담아둔 상품"
+    }
+
     private func notificationIdentifier(for date: Date) -> String {
         let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
         return groupedNotificationIdentifierPrefix
@@ -194,9 +330,10 @@ final class ReminderManager: NSObject, ObservableObject, UNUserNotificationCente
     }
 
     private func notificationDate(for reviewDate: Date) -> Date {
-        Calendar.current.date(
-            bySettingHour: notificationHour,
-            minute: 0,
+        let minuteOfDay = ReminderTimePreference.minuteOfDay
+        return Calendar.current.date(
+            bySettingHour: minuteOfDay / 60,
+            minute: minuteOfDay % 60,
             second: 0,
             of: reviewDate
         ) ?? reviewDate

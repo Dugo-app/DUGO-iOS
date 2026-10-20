@@ -14,20 +14,7 @@ import UIKit
 final class ShareComposerModel: ObservableObject {
     // MARK: - Properties
 
-    @Published var link = ""
-    @Published var title = ""
-    @Published var price = ""
-    @Published var reason = ""
-    @Published var category = "미분류"
-    @Published var hasReviewDate = true
-    @Published var reviewDate =
-        Calendar.current.date(
-            byAdding: .day,
-            value: 3,
-            to: Calendar.current.startOfDay(for: .now)
-        ) ?? .now
-    @Published var wantsReminder = false
-    @Published var imageData: Data?
+    @Published var draft = WishDraft()
     @Published var isReadingLink = false
     @Published var isLoadingPreview = false
     @Published var previewedLink: String?
@@ -40,17 +27,48 @@ final class ShareComposerModel: ObservableObject {
     private var sharedContentTitle: String?
     private var sharedContentPrice: Int?
     private var sharedContentImageData: Data?
+    private var automaticTitle: String?
+    private var automaticPrice: String?
 
     // MARK: - Computed Properties
 
-    var validURL: URL? {
-        guard let url = URL(string: link.trimmingCharacters(in: .whitespacesAndNewlines)),
-            let scheme = url.scheme?.lowercased(),
-            ["http", "https"].contains(scheme),
-            url.host != nil
-        else { return nil }
-        return url
+    var link: String {
+        get { draft.link }
+        set { draft.link = newValue }
     }
+    var title: String {
+        get { draft.title }
+        set { draft.title = newValue }
+    }
+    var price: String {
+        get { draft.price }
+        set { draft.price = newValue }
+    }
+    var reason: String {
+        get { draft.reason }
+        set { draft.reason = newValue }
+    }
+    var category: String {
+        get { draft.category }
+        set { draft.category = newValue }
+    }
+    var hasReviewDate: Bool {
+        get { draft.hasReviewDate }
+        set { draft.hasReviewDate = newValue }
+    }
+    var reviewDate: Date {
+        get { draft.reviewDate }
+        set { draft.reviewDate = newValue }
+    }
+    var wantsReminder: Bool {
+        get { draft.wantsReminder }
+        set { draft.wantsReminder = newValue }
+    }
+    var imageData: Data? {
+        get { draft.imageData }
+        set { draft.imageData = newValue }
+    }
+    var validURL: URL? { draft.validURL }
 
     private var sharedAutofilledFields: Set<AutofilledField> {
         var fields: Set<AutofilledField> = []
@@ -87,9 +105,15 @@ final class ShareComposerModel: ObservableObject {
         previewedLink = nil
         highlightedFields = []
         imageData = usesSharedContent ? sharedContentImageData : nil
-        title = usesSharedContent ? sharedContentTitle ?? "" : ""
-        price = usesSharedContent ? sharedContentPrice.map(String.init) ?? "" : ""
-        formatPrice()
+        if title == automaticTitle || title.isEmpty {
+            title = usesSharedContent ? sharedContentTitle ?? "" : ""
+            automaticTitle = title.isEmpty ? nil : title
+        }
+        if price == automaticPrice || price.isEmpty {
+            price = usesSharedContent ? sharedContentPrice.map(String.init) ?? "" : ""
+            formatPrice()
+            automaticPrice = price.isEmpty ? nil : price
+        }
     }
 
     func applySharedContent(
@@ -105,7 +129,7 @@ final class ShareComposerModel: ObservableObject {
         link = url.absoluteString
     }
 
-    func loadPreview(animate: Bool) async {
+    func loadPreview(animate: Bool, isEditingPrice: Bool = false) async {
         guard validURL != nil else { return }
         let requestedLink = link
         var newlyAutofilledFields: Set<AutofilledField> = []
@@ -116,9 +140,10 @@ final class ShareComposerModel: ObservableObject {
             guard !Task.isCancelled, link == requestedLink else { return }
             if imageData == nil, let image = preview.imageData {
                 withAnimation(animate ? .easeInOut(duration: 0.28) : nil) {
-                    imageData = image
+                    if draft.fillImageIfMissing(image) {
+                        newlyAutofilledFields.insert(.image)
+                    }
                 }
-                newlyAutofilledFields.insert(.image)
             }
             if animate {
                 try? await Task.sleep(for: .milliseconds(150))
@@ -127,21 +152,24 @@ final class ShareComposerModel: ObservableObject {
 
             if title.isEmpty, let previewTitle = preview.title {
                 withAnimation(animate ? .easeInOut(duration: 0.28) : nil) {
-                    title = previewTitle
+                    if draft.fillTitleIfEmpty(previewTitle) {
+                        automaticTitle = draft.title
+                        newlyAutofilledFields.insert(.title)
+                    }
                 }
-                newlyAutofilledFields.insert(.title)
             }
             if animate {
                 try? await Task.sleep(for: .milliseconds(150))
             }
             guard !Task.isCancelled, link == requestedLink else { return }
 
-            if price.isEmpty, let amount = preview.price {
+            if price.isEmpty, !isEditingPrice, let amount = preview.price {
                 withAnimation(animate ? .easeInOut(duration: 0.28) : nil) {
-                    price = String(amount)
-                    formatPrice()
+                    if draft.fillPriceIfEmpty(amount) {
+                        automaticPrice = draft.price
+                        newlyAutofilledFields.insert(.price)
+                    }
                 }
-                newlyAutofilledFields.insert(.price)
             }
         } catch {
         }
@@ -157,70 +185,42 @@ final class ShareComposerModel: ObservableObject {
         }
     }
 
-    func save() throws {
-        guard let url = validURL else { throw ShareError.invalidLink }
-        let amount = price.replacingOccurrences(of: ",", with: "")
-            .replacingOccurrences(of: "원", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let parsedPrice: Int?
-        if amount.isEmpty {
-            parsedPrice = nil
-        } else if let value = Int(amount), value >= 0 {
-            parsedPrice = value
-        } else {
-            throw ShareError.invalidPrice
-        }
-        if hasReviewDate && reviewDate <= .now {
-            throw ShareError.pastDate
-        }
-
+    func save() async throws -> String? {
+        let values = try draft.validated()
         let wish = PendingSharedWish(
             id: UUID(),
             createdAt: .now,
-            link: url.absoluteString,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? (url.host ?? url.absoluteString)
-                : title.trimmingCharacters(in: .whitespacesAndNewlines),
+            link: values.link.absoluteString,
+            title: values.title,
             categoryRaw: category,
-            price: parsedPrice,
+            price: values.price,
             reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
             reviewAt: hasReviewDate ? reviewDate : nil,
             wantsReminder: hasReviewDate && wantsReminder,
             imageData: imageData
         )
         try SharedLinkInbox.enqueue(wish)
+        guard wish.wantsReminder == true else { return nil }
+
+        let pendingReminders = SharedLinkInbox.pending().compactMap { pending -> WishReminder? in
+            guard pending.wantsReminder == true, let date = pending.reviewAt else { return nil }
+            return WishReminder(itemID: pending.id, title: pending.title, date: date)
+        }
+        if !pendingReminders.isEmpty {
+            let reminders = ReminderManager()
+            await reminders.requestPermissionIfNeeded()
+            await reminders.synchronizeAdditional(pendingReminders)
+            return reminders.notice
+        }
+        return nil
     }
 
     func preparePriceForEditing() {
-        price = price.filter(\.isNumber)
+        draft.preparePriceForEditing()
     }
 
     func formatPrice() {
-        let digits = price.filter(\.isNumber)
-        guard !digits.isEmpty, let amount = Int(digits) else { return }
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.maximumFractionDigits = 0
-
-        if let formattedPrice = formatter.string(from: NSNumber(value: amount)) {
-            price = "\(formattedPrice)원"
-        }
-    }
-
-    // MARK: - Private Types
-
-    private enum ShareError: LocalizedError {
-        case invalidLink, invalidPrice, pastDate
-
-        var errorDescription: String? {
-            switch self {
-            case .invalidLink: "http 또는 https 상품 링크를 넣어주세요"
-            case .invalidPrice: "가격은 0 이상의 숫자로 입력해주세요"
-            case .pastDate: "다시 볼 날짜를 미래로 정해주세요"
-            }
-        }
+        draft.formatPrice()
     }
 }
 
@@ -244,6 +244,7 @@ struct ShareComposerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focusedField: InputField?
     @State private var visibleErrorMessage: String?
+    @State private var saveNotice: String?
     @State private var errorDismissTask: Task<Void, Never>?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isLoadingSelectedPhoto = false
@@ -254,11 +255,11 @@ struct ShareComposerView: View {
     // MARK: - Computed Properties
 
     private var categories: [String] {
-        let defaults = UserDefaults(suiteName: SharedLinkInbox.groupIdentifier)
-        let saved = defaults?.stringArray(forKey: "wishCategories.v1")
-        return saved?.isEmpty == false
-            ? saved ?? ["미분류"]
-            : ["디지털", "패션", "생활", "취미", "미분류"]
+        WishCategoryRepository().load()
+    }
+
+    private var cardShadowColor: Color {
+        .black.opacity(colorScheme == .dark ? 0.12 : 0.04)
     }
 
     // MARK: - Body
@@ -269,7 +270,7 @@ struct ShareComposerView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     section("상품 링크", optional: false) {
                         TextField("https://…", text: $model.link)
-                            .font(.system(size: 16))
+                            .font(DuGoFont.body16Regular.font)
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -286,8 +287,8 @@ struct ShareComposerView: View {
                             HStack(spacing: 10) {
                                 ProgressView()
                                 Text("공유한 링크를 읽고 있어요")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(themeSecondary)
+                                    .font(DuGoFont.body14Regular.font)
+                                    .foregroundStyle(DuGoTheme.secondary)
                             }
                         }
                     }
@@ -298,8 +299,8 @@ struct ShareComposerView: View {
                                 HStack(spacing: 10) {
                                     ProgressView()
                                     Text("상품 정보를 불러오는 중이에요")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(themeSecondary)
+                                        .font(DuGoFont.body14Regular.font)
+                                        .foregroundStyle(DuGoTheme.secondary)
                                 }
                                 .frame(minHeight: 54)
                             } else {
@@ -312,7 +313,7 @@ struct ShareComposerView: View {
                                     cardDivider
 
                                     TextField("상품 이름", text: $model.title)
-                                        .font(.system(size: 16))
+                                        .font(DuGoFont.body16Regular.font)
                                         .focused($focusedField, equals: .title)
                                         .frame(minHeight: 54)
                                         .background { autofillBackground(for: .title) }
@@ -320,7 +321,7 @@ struct ShareComposerView: View {
                                     cardDivider
 
                                     TextField("가격 (원)", text: $model.price)
-                                        .font(.system(size: 16))
+                                        .font(DuGoFont.body16Regular.font)
                                         .keyboardType(.numberPad)
                                         .focused($focusedField, equals: .price)
                                         .frame(minHeight: 54)
@@ -330,8 +331,8 @@ struct ShareComposerView: View {
 
                                     HStack {
                                         Text("카테고리")
-                                            .font(.system(size: 16))
-                                            .foregroundStyle(themeInk)
+                                            .font(DuGoFont.body16Regular.font)
+                                            .foregroundStyle(DuGoTheme.ink)
 
                                         Spacer()
 
@@ -342,7 +343,7 @@ struct ShareComposerView: View {
                                         }
                                         .labelsHidden()
                                         .pickerStyle(.menu)
-                                        .tint(themeInk)
+                                        .tint(DuGoTheme.ink)
                                     }
                                     .frame(minHeight: 54)
                                 }
@@ -360,7 +361,7 @@ struct ShareComposerView: View {
                             Group {
                                 section("사고 싶은 이유") {
                                     TextField("어떤 순간에 필요할까요?", text: $model.reason, axis: .vertical)
-                                        .font(.system(size: 16))
+                                        .font(DuGoFont.body16Regular.font)
                                         .lineLimit(4...7)
                                         .focused($focusedField, equals: .reason)
                                         .frame(minHeight: 96, alignment: .topLeading)
@@ -369,8 +370,8 @@ struct ShareComposerView: View {
                                 section("다시 만나는 날") {
                                     VStack(alignment: .leading, spacing: 16) {
                                         Toggle("다시 볼 날짜 정하기", isOn: $model.hasReviewDate)
-                                            .font(.system(size: 16, weight: .medium))
-                                            .tint(themeAccent)
+                                            .font(DuGoFont.body16Medium.font)
+                                            .tint(DuGoTheme.accent)
 
                                         if model.hasReviewDate {
                                             cardDivider
@@ -381,13 +382,13 @@ struct ShareComposerView: View {
                                             cardDivider
 
                                             Toggle("알림 받기", isOn: $model.wantsReminder)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .tint(themeAccent)
+                                                .font(DuGoFont.body16Medium.font)
+                                                .tint(DuGoTheme.accent)
                                         }
                                     }
                                 } footer: {
                                     if model.hasReviewDate && model.wantsReminder {
-                                        Text("선택한 날 오후 1시에 알림을 보내드려요")
+                                        Text("선택한 날 \(ReminderTimePreference.displayText)에 알림을 보내드려요")
                                     }
                                 }
                             }
@@ -402,32 +403,46 @@ struct ShareComposerView: View {
                 .animation(revealAnimation, value: showsAdditionalDetails)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(themeBackground)
+            .dugoScreen()
             .navigationTitle("마음 담기")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("취소", action: onCancel)
-                        .tint(themeInk)
+                        .tint(DuGoTheme.ink)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("저장") {
                         model.isSaving = true
-                        defer { model.isSaving = false }
-                        do {
-                            try model.save()
-                            onSaved()
-                        } catch {
-                            model.errorMessage = error.localizedDescription
+                        focusedField = nil
+                        Task {
+                            defer { model.isSaving = false }
+                            do {
+                                if let notice = try await model.save() {
+                                    saveNotice = notice
+                                } else {
+                                    onSaved()
+                                }
+                            } catch {
+                                model.errorMessage = error.localizedDescription
+                            }
                         }
                     }
-                    .tint(themeAccent)
+                    .tint(DuGoTheme.accent)
                     .fontWeight(.semibold)
-                    .disabled(model.validURL == nil || model.isSaving)
+                    .disabled(model.validURL == nil || model.isSaving || saveNotice != nil)
                 }
             }
             .dismissKeyboardOnBackgroundTap()
+            .alert("마음은 저장했어요", isPresented: Binding(
+                get: { saveNotice != nil },
+                set: { if !$0 { saveNotice = nil } }
+            )) {
+                Button("확인", action: onSaved)
+            } message: {
+                Text(saveNotice ?? "")
+            }
             .overlay(alignment: .top) {
                 if let visibleErrorMessage {
                     shareErrorToast(visibleErrorMessage)
@@ -467,7 +482,10 @@ struct ShareComposerView: View {
                 guard model.validURL != nil else { return }
                 try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
-                await model.loadPreview(animate: !reduceMotion)
+                await model.loadPreview(
+                    animate: !reduceMotion,
+                    isEditingPrice: focusedField == .price
+                )
             }
             .task(id: model.highlightedFields) {
                 guard !model.highlightedFields.isEmpty else { return }
@@ -507,8 +525,8 @@ struct ShareComposerView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(selectedPhoto == nil ? "대표 사진을 가져왔어요" : "대표 사진을 추가했어요")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(themeInk)
+                            .font(DuGoFont.button14Medium.font)
+                            .foregroundStyle(DuGoTheme.ink)
 
                         if selectedPhoto == nil {
                             HStack(spacing: 12) {
@@ -516,8 +534,8 @@ struct ShareComposerView: View {
                                     Task { await model.loadPreview(animate: !reduceMotion) }
                                 } label: {
                                     Text("다시 불러오기")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(themeSecondary)
+                                        .font(DuGoFont.caption12Regular.font)
+                                        .foregroundStyle(DuGoTheme.secondary)
                                         .underline()
                                 }
                                 .buttonStyle(.plain)
@@ -534,15 +552,15 @@ struct ShareComposerView: View {
                     ProgressView()
 
                     Text("사진을 추가하는 중이에요")
-                        .font(.system(size: 14))
-                        .foregroundStyle(themeSecondary)
+                        .font(DuGoFont.body14Regular.font)
+                        .foregroundStyle(DuGoTheme.secondary)
                 }
                 .frame(minHeight: 54)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("대표 사진을 찾지 못했어요")
-                        .font(.system(size: 14))
-                        .foregroundStyle(themeSecondary)
+                        .font(DuGoFont.body14Regular.font)
+                        .foregroundStyle(DuGoTheme.secondary)
 
                     galleryPicker("갤러리에서 직접 추가")
                 }
@@ -551,7 +569,7 @@ struct ShareComposerView: View {
 
             if let photoSelectionMessage {
                 Text(photoSelectionMessage)
-                    .font(.system(size: 12))
+                    .font(DuGoFont.caption12Regular.font)
                     .foregroundStyle(.red)
             }
         }
@@ -560,8 +578,8 @@ struct ShareComposerView: View {
     private func galleryPicker(_ title: String) -> some View {
         PhotosPicker(selection: $selectedPhoto, matching: .images) {
             Text(title)
-                .font(.system(size: 12))
-                .foregroundStyle(themeSecondary)
+                .font(DuGoFont.caption12Regular.font)
+                .foregroundStyle(DuGoTheme.secondary)
                 .underline()
         }
     }
@@ -587,8 +605,8 @@ struct ShareComposerView: View {
                 content()
             }
             footer()
-                .font(.system(size: 12))
-                .foregroundStyle(themeSecondary)
+                .font(DuGoFont.caption12Regular.font)
+                .foregroundStyle(DuGoTheme.secondary)
         }
     }
 
@@ -602,12 +620,12 @@ struct ShareComposerView: View {
 
     private func sectionTitle(_ title: String, optional: Bool) -> some View {
         Text(title)
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(themeInk)
+            .font(DuGoFont.title18SemiBold.font)
+            .foregroundStyle(DuGoTheme.ink)
             .overlay(alignment: .topTrailing) {
                 if !optional {
                     Circle()
-                        .fill(themeAccent)
+                        .fill(DuGoTheme.accent)
                         .frame(width: 6, height: 6)
                         .offset(x: 8, y: -2)
                 }
@@ -626,14 +644,14 @@ struct ShareComposerView: View {
             .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             .background {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(themeSurface)
-                    .shadow(color: themeShadowColor, radius: 5)
+                    .fill(DuGoTheme.surface)
+                    .shadow(color: cardShadowColor, radius: 5)
             }
     }
 
     private var cardDivider: some View {
         Rectangle()
-            .fill(themeBorder.opacity(0.65))
+            .fill(DuGoTheme.border.opacity(0.65))
             .frame(height: 1)
             .padding(.horizontal, -16)
     }
@@ -648,14 +666,14 @@ struct ShareComposerView: View {
                         selectReviewDay(days)
                     } label: {
                         Text(days == 1 ? "내일" : "\(days)일 뒤")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(isSelected ? themeOnAccent : themeSecondary)
+                            .font(DuGoFont.button14Medium.font)
+                            .foregroundStyle(isSelected ? DuGoTheme.onAccent : DuGoTheme.secondary)
                             .padding(.horizontal, 16)
                             .frame(height: 40)
                             .background {
                                 Capsule()
-                                    .fill(isSelected ? themeAccent : themeSurface)
-                                    .shadow(color: themeShadowColor, radius: 4)
+                                    .fill(isSelected ? DuGoTheme.accent : DuGoTheme.surface)
+                                    .shadow(color: cardShadowColor, radius: 4)
                             }
                     }
                     .buttonStyle(.plain)
@@ -735,7 +753,7 @@ struct ShareComposerView: View {
     private func presentInvalidLinkErrorIfNeeded() {
         let trimmed = model.link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, model.validURL == nil else { return }
-        model.errorMessage = "http 또는 https로 시작하는 상품 링크를 넣어주세요"
+        model.errorMessage = DraftError.invalidLink.errorDescription
     }
 
     private func presentErrorToast(_ message: String) {
@@ -764,18 +782,18 @@ struct ShareComposerView: View {
     private func shareErrorToast(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(DuGoFont.button16Medium.font)
 
             Text(message)
-                .font(.system(size: 14, weight: .medium))
+                .font(DuGoFont.button14Medium.font)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(themeBackground)
+        .foregroundStyle(DuGoTheme.background)
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .frame(maxWidth: 560, alignment: .leading)
         .background(
-            themeInk,
+            DuGoTheme.ink,
             in: RoundedRectangle(cornerRadius: 13, style: .continuous)
         )
         .shadow(color: Color.black.opacity(0.14), radius: 12, y: 5)
@@ -783,46 +801,9 @@ struct ShareComposerView: View {
 
     private func autofillBackground(for field: ShareComposerModel.AutofilledField) -> some View {
         Rectangle()
-            .fill(themeAccent.opacity(0.12))
+            .fill(DuGoTheme.accent.opacity(0.12))
             .opacity(model.highlightedFields.contains(field) ? 1 : 0)
             .padding(.horizontal, -16)
             .allowsHitTesting(false)
-    }
-
-    // MARK: - Theme
-
-    private var themeBackground: Color {
-        colorScheme == .dark
-            ? Color(red: 18 / 255, green: 18 / 255, blue: 18 / 255)
-            : Color(red: 251 / 255, green: 251 / 255, blue: 251 / 255)
-    }
-    private var themeSurface: Color {
-        colorScheme == .dark ? Color(red: 34 / 255, green: 34 / 255, blue: 34 / 255) : .white
-    }
-    private var themeInk: Color {
-        colorScheme == .dark
-            ? Color(red: 245 / 255, green: 245 / 255, blue: 245 / 255)
-            : Color(red: 32 / 255, green: 33 / 255, blue: 36 / 255)
-    }
-    private var themeSecondary: Color {
-        colorScheme == .dark
-            ? Color(red: 176 / 255, green: 176 / 255, blue: 176 / 255)
-            : Color(red: 117 / 255, green: 117 / 255, blue: 117 / 255)
-    }
-    private var themeBorder: Color {
-        colorScheme == .dark
-            ? Color(red: 56 / 255, green: 56 / 255, blue: 56 / 255)
-            : Color(red: 233 / 255, green: 233 / 255, blue: 233 / 255)
-    }
-    private var themeShadowColor: Color {
-        .black.opacity(colorScheme == .dark ? 0.12 : 0.04)
-    }
-    private var themeAccent: Color {
-        Color(red: 245 / 255, green: 90 / 255, blue: 116 / 255)
-    }
-    private var themeOnAccent: Color {
-        colorScheme == .dark
-            ? Color(red: 41 / 255, green: 41 / 255, blue: 41 / 255)
-            : Color(red: 247 / 255, green: 247 / 255, blue: 250 / 255)
     }
 }

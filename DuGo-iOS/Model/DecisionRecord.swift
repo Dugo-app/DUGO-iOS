@@ -10,13 +10,13 @@ import SwiftData
 
 @Model
 final class DecisionRecord {
-    @Attribute(.unique) var id: UUID
-    var itemID: UUID
-    var title: String
-    var decisionRaw: String
-    var feeling: String
-    var note: String
-    var createdAt: Date
+    var id: UUID = UUID()
+    var itemID: UUID = UUID()
+    var title: String = ""
+    var decisionRaw: String = "더 두기"
+    var feeling: String = ""
+    var note: String = ""
+    var createdAt: Date = Date.now
 
     init(
         item: WishItem,
