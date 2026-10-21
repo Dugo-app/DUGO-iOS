@@ -37,9 +37,18 @@ struct DuGo_iOSApp: App {
         var resolvedContainer: ModelContainer?
         var isCloudConfigured = false
 
+        do {
+            try LegacyStoreBackup.createIfNeeded(for: storeURL)
+        } catch {
+            logger.error("Existing storage backup failed: \(error.localizedDescription)")
+            container = nil
+            cloudSyncConfigured = false
+            return
+        }
+
+        #if DEBUG
         if let identifier = CloudSyncConfiguration.containerIdentifier {
             do {
-                #if DEBUG
                 do {
                     try CloudKitSchemaInitializer.initializeIfNeeded(
                         storeURL: storeURL,
@@ -48,7 +57,6 @@ struct DuGo_iOSApp: App {
                 } catch {
                     logger.error("CloudKit schema initialization failed: \(error.localizedDescription)")
                 }
-                #endif
 
                 let configuration = ModelConfiguration(
                     "DoGo",
@@ -65,6 +73,7 @@ struct DuGo_iOSApp: App {
                 logger.error("Cloud storage initialization failed: \(error.localizedDescription)")
             }
         }
+        #endif
 
         if resolvedContainer == nil {
             do {
@@ -122,5 +131,46 @@ struct DuGo_iOSApp: App {
                 CloudSyncMonitor.recordSuccessfulSync(event)
             }
         }
+    }
+}
+
+private enum LegacyStoreBackup {
+    // MARK: - Methods
+
+    static func createIfNeeded(for storeURL: URL) throws {
+        let fileManager = FileManager.default
+        let directory = storeURL.deletingLastPathComponent()
+        guard fileManager.fileExists(atPath: directory.path) else { return }
+
+        let backupURL = directory.appendingPathComponent("DoGoPreCloudBackup", isDirectory: true)
+        guard !fileManager.fileExists(atPath: backupURL.path) else { return }
+
+        let storeName = storeURL.lastPathComponent
+        let files = try fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ).filter { url in
+            let name = url.lastPathComponent
+            return name == storeName
+                || name.hasPrefix(storeName + "-")
+                || name.hasPrefix(storeName + "_")
+                || name.hasPrefix("." + storeName + "_")
+        }
+        guard !files.isEmpty else { return }
+
+        let stagingURL = directory.appendingPathComponent(
+            "DoGoPreCloudBackup-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try fileManager.createDirectory(at: stagingURL, withIntermediateDirectories: false)
+        defer { try? fileManager.removeItem(at: stagingURL) }
+
+        for file in files {
+            try fileManager.copyItem(
+                at: file,
+                to: stagingURL.appendingPathComponent(file.lastPathComponent)
+            )
+        }
+        try fileManager.moveItem(at: stagingURL, to: backupURL)
     }
 }
