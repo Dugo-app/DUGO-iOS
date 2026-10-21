@@ -372,13 +372,17 @@ struct WishEditorView: View {
                         Text(selectedPhoto == nil ? "대표 사진을 가져왔어요" : "대표 사진을 추가했어요")
                             .applyDuGoFont(.body14Medium)
                         if selectedPhoto == nil {
-                            Button(action: reloadImage) {
-                                Text("다시 불러오기")
-                                    .applyDuGoFont(.caption12Regular)
-                                    .foregroundStyle(DuGoTheme.secondary)
-                                    .underline()
+                            HStack(spacing: 12) {
+                                Button(action: reloadImage) {
+                                    Text("다시 불러오기")
+                                        .applyDuGoFont(.caption12Regular)
+                                        .foregroundStyle(DuGoTheme.secondary)
+                                        .underline()
+                                }
+                                .buttonStyle(.plain)
+
+                                galleryPicker("사진 바꾸기")
                             }
-                            .buttonStyle(.plain)
                         } else {
                             galleryPicker("사진 바꾸기")
                         }
@@ -420,6 +424,7 @@ struct WishEditorView: View {
             Text(title)
                 .applyDuGoFont(.caption12Regular)
                 .foregroundStyle(DuGoTheme.secondary)
+                .underline()
         }
     }
 
