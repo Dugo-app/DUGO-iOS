@@ -13,6 +13,14 @@ import Foundation
 enum CloudSyncConfiguration {
     // MARK: - Properties
 
+    static var isPausedForSafety: Bool {
+        #if DEBUG
+        false
+        #else
+        true
+        #endif
+    }
+
     static var containerIdentifier: String? {
         guard let identifier = Bundle.main.object(
             forInfoDictionaryKey: "DuGoCloudKitContainerIdentifier"
@@ -33,6 +41,7 @@ final class CloudSyncMonitor: ObservableObject {
         case noAccount
         case unavailable
         case notConfigured
+        case paused
 
         var title: String {
             switch self {
@@ -41,6 +50,7 @@ final class CloudSyncMonitor: ObservableObject {
             case .noAccount: "iCloud 계정 필요"
             case .unavailable: "확인 필요"
             case .notConfigured: "연결되지 않음"
+            case .paused: "동기화 일시 중지"
             }
         }
 
@@ -54,6 +64,8 @@ final class CloudSyncMonitor: ObservableObject {
                 "iCloud 상태를 확인하지 못했어요 잠시 후 다시 확인해 주세요"
             case .notConfigured:
                 "기록은 이 기기에 저장돼요 iCloud 연결을 확인해 주세요"
+            case .paused:
+                "기록 보호를 위해 iCloud 동기화를 잠시 중지했어요 기록은 이 기기에 저장돼요"
             }
         }
     }
@@ -78,7 +90,7 @@ final class CloudSyncMonitor: ObservableObject {
 
     init(isConfigured: Bool) {
         self.isConfigured = isConfigured
-        status = isConfigured ? .checking : .notConfigured
+        status = isConfigured ? .checking : Self.inactiveStatus
         lastSyncAt = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
     }
 
@@ -87,7 +99,7 @@ final class CloudSyncMonitor: ObservableObject {
     func refresh() async {
         lastSyncAt = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
         guard isConfigured, let identifier = CloudSyncConfiguration.containerIdentifier else {
-            status = .notConfigured
+            status = Self.inactiveStatus
             return
         }
 
@@ -109,6 +121,10 @@ final class CloudSyncMonitor: ObservableObject {
         @unknown default:
             status = .unavailable
         }
+    }
+
+    private static var inactiveStatus: Status {
+        CloudSyncConfiguration.isPausedForSafety ? .paused : .notConfigured
     }
 
     func record(_ event: NSPersistentCloudKitContainer.Event) {
