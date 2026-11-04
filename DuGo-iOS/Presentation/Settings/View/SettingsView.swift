@@ -72,9 +72,9 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 28) {
                 managementSection
 
-                dataSection
-
                 permissionSection
+
+                dataSection
 
                 helpSection
 
@@ -210,19 +210,12 @@ struct SettingsView: View {
     }
 
     private var dataSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            settingsSection(title: "데이터") {
-                settingsRow(
-                    title: "iCloud 동기화",
-                    systemImage: "icloud",
-                    trailingText: cloudSyncMonitor.statusLabel
-                )
-            }
-
-            Text(cloudSyncMonitor.status.description)
-                .applyDuGoFont(.caption12Regular)
-                .foregroundStyle(DuGoTheme.secondary)
-                .padding(.horizontal, 4)
+        settingsSection(title: "데이터") {
+            settingsRow(
+                title: "iCloud 동기화",
+                systemImage: "icloud",
+                trailingText: cloudSyncMonitor.statusLabel
+            )
         }
     }
 
