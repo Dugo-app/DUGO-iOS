@@ -5,7 +5,6 @@
 //  Created by 김승원 on 19/9/26.
 //
 
-import CoreData
 import OSLog
 import SwiftData
 import SwiftUI
@@ -23,6 +22,7 @@ struct DuGo_iOSApp: App {
 
     init() {
         FirebaseConfigurator.configure()
+        CloudSyncMonitor.startRecording()
 
         let manager = ReminderManager()
         manager.start()
@@ -46,9 +46,9 @@ struct DuGo_iOSApp: App {
             return
         }
 
-        #if DEBUG
         if let identifier = CloudSyncConfiguration.containerIdentifier {
             do {
+                #if DEBUG
                 do {
                     try CloudKitSchemaInitializer.initializeIfNeeded(
                         storeURL: storeURL,
@@ -57,6 +57,7 @@ struct DuGo_iOSApp: App {
                 } catch {
                     logger.error("CloudKit schema initialization failed: \(error.localizedDescription)")
                 }
+                #endif
 
                 let configuration = ModelConfiguration(
                     "DoGo",
@@ -73,7 +74,6 @@ struct DuGo_iOSApp: App {
                 logger.error("Cloud storage initialization failed: \(error.localizedDescription)")
             }
         }
-        #endif
 
         if resolvedContainer == nil {
             do {
@@ -120,21 +120,15 @@ struct DuGo_iOSApp: App {
                     }
                 }
             }
-            .onReceive(
-                NotificationCenter.default.publisher(
-                    for: NSPersistentCloudKitContainer.eventChangedNotification
-                )
-            ) { notification in
-                guard let event = notification.userInfo?[
-                    NSPersistentCloudKitContainer.eventNotificationUserInfoKey
-                ] as? NSPersistentCloudKitContainer.Event else { return }
-                CloudSyncMonitor.recordSuccessfulSync(event)
-            }
         }
     }
 }
 
 private enum LegacyStoreBackup {
+    // MARK: - Properties
+
+    private static let directoryName = "DoGoPreCloudBackup-v2"
+
     // MARK: - Methods
 
     static func createIfNeeded(for storeURL: URL) throws {
@@ -142,16 +136,18 @@ private enum LegacyStoreBackup {
         let directory = storeURL.deletingLastPathComponent()
         guard fileManager.fileExists(atPath: directory.path) else { return }
 
-        let backupURL = directory.appendingPathComponent("DoGoPreCloudBackup", isDirectory: true)
+        let backupURL = directory.appendingPathComponent(directoryName, isDirectory: true)
         guard !fileManager.fileExists(atPath: backupURL.path) else { return }
 
         let storeName = storeURL.lastPathComponent
+        let supportDirectoryName = "." + storeURL.deletingPathExtension().lastPathComponent + "_SUPPORT"
         let files = try fileManager.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil
         ).filter { url in
             let name = url.lastPathComponent
             return name == storeName
+                || name == supportDirectoryName
                 || name.hasPrefix(storeName + "-")
                 || name.hasPrefix(storeName + "_")
                 || name.hasPrefix("." + storeName + "_")
@@ -159,7 +155,7 @@ private enum LegacyStoreBackup {
         guard !files.isEmpty else { return }
 
         let stagingURL = directory.appendingPathComponent(
-            "DoGoPreCloudBackup-\(UUID().uuidString)",
+            "\(directoryName)-\(UUID().uuidString)",
             isDirectory: true
         )
         try fileManager.createDirectory(at: stagingURL, withIntermediateDirectories: false)
