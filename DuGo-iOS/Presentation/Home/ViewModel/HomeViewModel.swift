@@ -312,13 +312,23 @@ final class HomeViewModel: ObservableObject {
         }
 
         let uncategorized = WishCategory.other.rawValue
-        let insertionIndex = categories.firstIndex(of: uncategorized) ?? categories.endIndex
         do {
             let entries = try ensureCategoryEntries()
+            let changedAt = Date.now
+            for (index, category) in categories.filter({ $0 != uncategorized }).enumerated() {
+                updateCategoryEntry(
+                    name: category,
+                    sortOrder: index + 1,
+                    isRemoved: false,
+                    updatedAt: changedAt,
+                    entries: entries
+                )
+            }
             updateCategoryEntry(
                 name: name,
-                sortOrder: insertionIndex,
+                sortOrder: 0,
                 isRemoved: false,
+                updatedAt: changedAt,
                 entries: entries
             )
             if !itemIDs.isEmpty {
@@ -328,7 +338,7 @@ final class HomeViewModel: ObservableObject {
                 }
             }
             try context.save()
-            categories.insert(name, at: insertionIndex)
+            categories.insert(name, at: 0)
             categoryRepository.save(categories)
             reload()
         } catch {
