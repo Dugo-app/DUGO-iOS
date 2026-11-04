@@ -13,14 +13,6 @@ import Foundation
 enum CloudSyncConfiguration {
     // MARK: - Properties
 
-    static var isPausedForSafety: Bool {
-        #if DEBUG
-        false
-        #else
-        true
-        #endif
-    }
-
     static var containerIdentifier: String? {
         guard let identifier = Bundle.main.object(
             forInfoDictionaryKey: "DuGoCloudKitContainerIdentifier"
@@ -41,7 +33,6 @@ final class CloudSyncMonitor: ObservableObject {
         case noAccount
         case unavailable
         case notConfigured
-        case paused
 
         var title: String {
             switch self {
@@ -50,7 +41,6 @@ final class CloudSyncMonitor: ObservableObject {
             case .noAccount: "iCloud 계정 필요"
             case .unavailable: "확인 필요"
             case .notConfigured: "연결되지 않음"
-            case .paused: "동기화 일시 중지"
             }
         }
 
@@ -64,8 +54,6 @@ final class CloudSyncMonitor: ObservableObject {
                 "iCloud 상태를 확인하지 못했어요 잠시 후 다시 확인해 주세요"
             case .notConfigured:
                 "기록은 이 기기에 저장돼요 iCloud 연결을 확인해 주세요"
-            case .paused:
-                "기록 보호를 위해 iCloud 동기화를 잠시 중지했어요 기록은 이 기기에 저장돼요"
             }
         }
     }
@@ -76,10 +64,11 @@ final class CloudSyncMonitor: ObservableObject {
     @Published private(set) var lastSyncAt: Date?
     private let isConfigured: Bool
     private static let lastSyncKey = "lastSuccessfulCloudSyncAt"
+    private static var syncEvents: AnyCancellable?
 
     var statusLabel: String {
         guard case .available = status else { return status.title }
-        guard let lastSyncAt else { return "기록 없음" }
+        guard let lastSyncAt else { return "첫 동기화 대기 중" }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.dateFormat = "yyyy.MM.dd HH:mm"
@@ -90,16 +79,37 @@ final class CloudSyncMonitor: ObservableObject {
 
     init(isConfigured: Bool) {
         self.isConfigured = isConfigured
-        status = isConfigured ? .checking : Self.inactiveStatus
+        status = isConfigured ? .checking : .notConfigured
         lastSyncAt = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
     }
 
     // MARK: - Methods
 
+    static func startRecording() {
+        guard syncEvents == nil else { return }
+
+        syncEvents = NotificationCenter.default.publisher(
+            for: NSPersistentCloudKitContainer.eventChangedNotification
+        )
+        .compactMap { notification -> Date? in
+            guard let event = notification.userInfo?[
+                NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+            ] as? NSPersistentCloudKitContainer.Event,
+                event.type == .import || event.type == .export,
+                event.succeeded
+            else { return nil }
+            return event.endDate
+        }
+        .receive(on: DispatchQueue.main)
+        .sink { date in
+            saveSuccessfulSyncDate(date)
+        }
+    }
+
     func refresh() async {
         lastSyncAt = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
         guard isConfigured, let identifier = CloudSyncConfiguration.containerIdentifier else {
-            status = Self.inactiveStatus
+            status = .notConfigured
             return
         }
 
@@ -123,10 +133,6 @@ final class CloudSyncMonitor: ObservableObject {
         }
     }
 
-    private static var inactiveStatus: Status {
-        CloudSyncConfiguration.isPausedForSafety ? .paused : .notConfigured
-    }
-
     func record(_ event: NSPersistentCloudKitContainer.Event) {
         guard let date = Self.recordSuccessfulSync(event) else { return }
         if date > (lastSyncAt ?? .distantPast) {
@@ -141,10 +147,14 @@ final class CloudSyncMonitor: ObservableObject {
             let endDate = event.endDate
         else { return nil }
 
-        let previous = UserDefaults.standard.object(forKey: lastSyncKey) as? Date
-        if endDate > (previous ?? .distantPast) {
-            UserDefaults.standard.set(endDate, forKey: lastSyncKey)
-        }
+        saveSuccessfulSyncDate(endDate)
         return endDate
+    }
+
+    private static func saveSuccessfulSyncDate(_ date: Date) {
+        let previous = UserDefaults.standard.object(forKey: lastSyncKey) as? Date
+        if date > (previous ?? .distantPast) {
+            UserDefaults.standard.set(date, forKey: lastSyncKey)
+        }
     }
 }

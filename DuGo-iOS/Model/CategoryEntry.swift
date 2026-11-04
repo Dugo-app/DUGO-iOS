@@ -18,19 +18,22 @@ final class CategoryEntry {
     var replacementName: String?
     var updatedAt: Date = Date.now
 
+    // MARK: - Computed Properties
+
+    var isRemoved: Bool { replacementName != nil }
+
     // MARK: - Initializer
 
     init(
         name: String,
         sortOrder: Int,
-        isDeleted: Bool = false,
+        isRemoved: Bool = false,
         replacementName: String? = nil,
         updatedAt: Date = .now
     ) {
         self.name = name
         self.sortOrder = sortOrder
-        self.isDeleted = isDeleted
-        self.replacementName = replacementName
+        self.replacementName = isRemoved ? (replacementName ?? WishCategory.other.rawValue) : nil
         self.updatedAt = updatedAt
     }
 }
