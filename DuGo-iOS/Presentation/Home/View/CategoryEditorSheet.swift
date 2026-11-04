@@ -13,7 +13,6 @@ struct CategoryEditorSheet: View {
     @ObservedObject private var viewModel: HomeViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var searchText = ""
     @State private var selectedItemIDs = Set<UUID>()
     @State private var validationMessage: String?
     @FocusState private var isNameFocused: Bool
@@ -51,7 +50,7 @@ struct CategoryEditorSheet: View {
         .scrollDismissesKeyboard(.interactively)
         .dismissKeyboardOnBackgroundTap()
         .onChange(of: availableItemIDs) { _, itemIDs in
-            selectedItemIDs.formIntersection(itemIDs)
+            updateSelection(selectedItemIDs.intersection(itemIDs))
         }
     }
 
@@ -65,27 +64,6 @@ struct CategoryEditorSheet: View {
         selectedItemIDs.intersection(availableItemIDs).count
     }
 
-    private var filteredItems: [WishItem] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return viewModel.keptItems.filter {
-            query.isEmpty
-                || $0.title.localizedCaseInsensitiveContains(query)
-                || $0.categoryRaw.localizedCaseInsensitiveContains(query)
-        }
-    }
-
-    private var allVisibleItemsSelected: Bool {
-        !filteredItems.isEmpty && filteredItems.allSatisfy { selectedItemIDs.contains($0.id) }
-    }
-
-    private var selectionActionTitle: String {
-        let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if allVisibleItemsSelected {
-            return isSearching ? "검색 결과 해제" : "전체 해제"
-        }
-        return isSearching ? "검색 결과 선택" : "전체 선택"
-    }
-
     private var primaryTitle: String {
         selectedCount == 0 ? "카테고리 추가" : "\(selectedCount)개 옮기고 추가"
     }
@@ -93,16 +71,9 @@ struct CategoryEditorSheet: View {
     // MARK: - Subviews
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("카테고리 추가")
-                .applyDuGoFont(.display24SemiBold)
-                .foregroundStyle(DuGoTheme.ink)
-
-            Text("담아 둔 상품을 골라 새 카테고리로 함께 옮길 수 있어요")
-                .applyDuGoFont(.body14Regular)
-                .foregroundStyle(DuGoTheme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text("카테고리 추가")
+            .applyDuGoFont(.display24SemiBold)
+            .foregroundStyle(DuGoTheme.ink)
     }
 
     private var nameSection: some View {
@@ -148,8 +119,8 @@ struct CategoryEditorSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("함께 옮길 상품")
-                    .applyDuGoFont(.body16Medium)
-                    .foregroundStyle(DuGoTheme.ink)
+                    .applyDuGoFont(.body14Regular)
+                    .foregroundStyle(DuGoTheme.secondary)
 
                 Text("\(selectedCount)개 선택")
                     .applyDuGoFont(.caption12Medium)
@@ -161,64 +132,26 @@ struct CategoryEditorSheet: View {
             if viewModel.keptItems.isEmpty {
                 emptyMessage("담아 둔 상품이 아직 없어요\n상품을 선택하지 않아도 카테고리를 만들 수 있어요")
             } else {
-                searchField
-
-                HStack {
-                    Text("\(filteredItems.count)개")
-                        .applyDuGoFont(.caption12Regular)
-                        .foregroundStyle(DuGoTheme.secondary)
-
-                    Spacer()
-
-                    Button(selectionActionTitle) {
-                        toggleVisibleSelection()
-                    }
-                    .applyDuGoFont(.button14Medium)
-                    .foregroundStyle(DuGoTheme.accent)
-                    .buttonStyle(.plain)
-                    .disabled(filteredItems.isEmpty)
-                }
-
-                if filteredItems.isEmpty {
-                    emptyMessage("검색한 상품이 없어요")
-                } else {
-                    LazyVStack(spacing: 8) {
-                        ForEach(filteredItems, id: \.id) { item in
-                            selectionRow(item)
-                        }
+                LazyVStack(spacing: 8) {
+                    ForEach(viewModel.keptItems, id: \.id) { item in
+                        selectionRow(item)
                     }
                 }
             }
         }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 16))
-                .foregroundStyle(DuGoTheme.secondary)
-
-            TextField("상품명이나 카테고리로 검색", text: $searchText)
-                .applyDuGoFont(.body14Regular)
-                .foregroundStyle(DuGoTheme.ink)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 48)
-        .dugoRoundedSurface()
     }
 
     private func selectionRow(_ item: WishItem) -> some View {
         let isSelected = selectedItemIDs.contains(item.id)
 
         return Button {
-            if isSelected {
-                selectedItemIDs.remove(item.id)
+            var itemIDs = selectedItemIDs
+            if itemIDs.contains(item.id) {
+                itemIDs.remove(item.id)
             } else {
-                selectedItemIDs.insert(item.id)
+                itemIDs.insert(item.id)
             }
+            updateSelection(itemIDs)
         } label: {
             HStack(spacing: 12) {
                 FillWishImage(item: item, size: 48)
@@ -248,6 +181,7 @@ struct CategoryEditorSheet: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
                     .foregroundStyle(isSelected ? DuGoTheme.accent : DuGoTheme.secondary)
+                    .contentTransition(.identity)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -255,8 +189,13 @@ struct CategoryEditorSheet: View {
                 fill: isSelected ? DuGoTheme.accent.opacity(0.06) : DuGoTheme.surface,
                 borderColor: isSelected ? DuGoTheme.accent : DuGoTheme.border
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
     }
 
     private func emptyMessage(_ text: String) -> some View {
@@ -270,12 +209,12 @@ struct CategoryEditorSheet: View {
 
     // MARK: - Methods
 
-    private func toggleVisibleSelection() {
-        let visibleIDs = Set(filteredItems.map(\.id))
-        if allVisibleItemsSelected {
-            selectedItemIDs.subtract(visibleIDs)
-        } else {
-            selectedItemIDs.formUnion(visibleIDs)
+    private func updateSelection(_ itemIDs: Set<UUID>) {
+        guard itemIDs != selectedItemIDs else { return }
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            selectedItemIDs = itemIDs
         }
     }
 
