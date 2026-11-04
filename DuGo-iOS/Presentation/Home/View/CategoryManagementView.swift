@@ -82,6 +82,8 @@ struct CategoryManagementView: View {
         .environment(\.editMode, $editMode)
         .navigationTitle("카테고리 관리")
         .navigationBarTitleDisplayMode(.inline)
+        .dugoScreen()
+        .dugoErrorToast(message: $viewModel.errorMessage)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarVisibility(.visible, for: .navigationBar)
         .toolbar {
@@ -100,10 +102,9 @@ struct CategoryManagementView: View {
                         .frame(width: 24, height: 24)
                 }
                 .tint(DuGoTheme.ink)
+                .disabled(viewModel.isWorking)
             }
         }
-        .dugoScreen()
-        .dugoErrorToast(message: $viewModel.errorMessage)
         .scrollDismissesKeyboard(.interactively)
         .dismissKeyboardOnBackgroundTap()
         .onAppear { viewModel.reload() }
@@ -124,7 +125,7 @@ struct CategoryManagementView: View {
                 )
             case .delete(let category):
                 Alert(
-                    title: Text("카테고리를 삭제할까요?"),
+                    title: Text("\(category) 카테고리를 삭제할까요?"),
                     message: Text("이 카테고리에 담긴 상품은 모두 미분류로 이동해요"),
                     primaryButton: .cancel(Text("취소")),
                     secondaryButton: .destructive(Text("삭제")) {
@@ -200,8 +201,8 @@ struct CategoryManagementView: View {
                             beginRenaming(category)
                         } label: {
                             Image(systemName: "pencil")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(DuGoTheme.ink)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(DuGoTheme.secondary)
                                 .frame(width: 36, height: 40)
                         }
                         .buttonStyle(.plain)
@@ -211,8 +212,8 @@ struct CategoryManagementView: View {
                             managementAlert = .delete(category)
                         } label: {
                             Image(systemName: "trash")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(.red)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(DuGoTheme.accent)
                                 .frame(width: 36, height: 40)
                         }
                         .buttonStyle(.plain)
