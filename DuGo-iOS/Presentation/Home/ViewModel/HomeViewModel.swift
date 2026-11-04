@@ -302,7 +302,7 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
-    func addCategory(_ rawName: String) throws {
+    func addCategory(_ rawName: String, moving itemIDs: Set<UUID> = []) throws {
         guard categories.count < 10 else {
             throw WishCategoryManagementError.limitReached
         }
@@ -318,12 +318,19 @@ final class HomeViewModel: ObservableObject {
             updateCategoryEntry(
                 name: name,
                 sortOrder: insertionIndex,
-                isDeleted: false,
+                isRemoved: false,
                 entries: entries
             )
+            if !itemIDs.isEmpty {
+                let storedItems = try context.fetch(FetchDescriptor<WishItem>())
+                for item in storedItems where itemIDs.contains(item.id) && item.status == .keeping {
+                    item.categoryRaw = name
+                }
+            }
             try context.save()
             categories.insert(name, at: insertionIndex)
             categoryRepository.save(categories)
+            reload()
         } catch {
             context.rollback()
             reload()
@@ -351,7 +358,7 @@ final class HomeViewModel: ObservableObject {
             updateCategoryEntry(
                 name: category,
                 sortOrder: index,
-                isDeleted: true,
+                isRemoved: true,
                 replacementName: name,
                 updatedAt: changedAt,
                 entries: entries
@@ -359,11 +366,12 @@ final class HomeViewModel: ObservableObject {
             updateCategoryEntry(
                 name: name,
                 sortOrder: index,
-                isDeleted: false,
+                isRemoved: false,
                 updatedAt: changedAt,
                 entries: entries
             )
-            for item in items where item.categoryRaw == category {
+            let storedItems = try context.fetch(FetchDescriptor<WishItem>())
+            for item in storedItems where item.categoryRaw == category {
                 item.categoryRaw = name
             }
             try context.save()
@@ -393,10 +401,11 @@ final class HomeViewModel: ObservableObject {
             updateCategoryEntry(
                 name: category,
                 sortOrder: categories.firstIndex(of: category) ?? 0,
-                isDeleted: true,
+                isRemoved: true,
                 entries: entries
             )
-            for item in items where item.categoryRaw == category {
+            let storedItems = try context.fetch(FetchDescriptor<WishItem>())
+            for item in storedItems where item.categoryRaw == category {
                 item.categoryRaw = WishCategory.other.rawValue
             }
             try context.save()
@@ -438,7 +447,7 @@ final class HomeViewModel: ObservableObject {
                 updateCategoryEntry(
                     name: name,
                     sortOrder: index,
-                    isDeleted: false,
+                    isRemoved: false,
                     updatedAt: changedAt,
                     entries: entries
                 )
@@ -494,7 +503,7 @@ final class HomeViewModel: ObservableObject {
                     CategoryEntry(
                         name: name,
                         sortOrder: 0,
-                        isDeleted: true
+                        isRemoved: true
                     )
                 )
             }
@@ -509,7 +518,7 @@ final class HomeViewModel: ObservableObject {
     private func resolvedCategories(from entries: [CategoryEntry]) -> [String] {
         let latest = latestCategoryEntries(from: entries)
         let active = latest.values
-            .filter { !$0.isDeleted }
+            .filter { !$0.isRemoved && $0.name != WishCategory.other.rawValue }
             .map { (name: $0.name, sortOrder: $0.sortOrder) }
         let implicitDefaults = WishCategoryRepository.defaultCategories.enumerated()
             .filter { $0.element != WishCategory.other.rawValue && latest[$0.element] == nil }
@@ -532,7 +541,7 @@ final class HomeViewModel: ObservableObject {
                 continue
             }
             if entry.updatedAt > current.updatedAt
-                || (entry.updatedAt == current.updatedAt && entry.isDeleted && !current.isDeleted)
+                || (entry.updatedAt == current.updatedAt && entry.isRemoved && !current.isRemoved)
             {
                 latest[entry.name] = entry
             }
@@ -559,7 +568,7 @@ final class HomeViewModel: ObservableObject {
     private func updateCategoryEntry(
         name: String,
         sortOrder: Int,
-        isDeleted: Bool,
+        isRemoved: Bool,
         replacementName: String? = nil,
         updatedAt: Date = .now,
         entries: [CategoryEntry]
@@ -567,15 +576,14 @@ final class HomeViewModel: ObservableObject {
         let entry = latestCategoryEntries(from: entries)[name]
         if let entry {
             entry.sortOrder = sortOrder
-            entry.isDeleted = isDeleted
-            entry.replacementName = replacementName
+            entry.replacementName = isRemoved ? (replacementName ?? WishCategory.other.rawValue) : nil
             entry.updatedAt = updatedAt
         } else {
             context.insert(
                 CategoryEntry(
                     name: name,
                     sortOrder: sortOrder,
-                    isDeleted: isDeleted,
+                    isRemoved: isRemoved,
                     replacementName: replacementName,
                     updatedAt: updatedAt
                 )
@@ -584,12 +592,23 @@ final class HomeViewModel: ObservableObject {
     }
 
     private func reconcileItemsWithDeletedCategories(_ entries: [CategoryEntry]) throws {
-        let deleted = latestCategoryEntries(from: entries).filter { $0.value.isDeleted }
+        let latest = latestCategoryEntries(from: entries)
+        let uncategorized = WishCategory.other.rawValue
         var hasChanges = false
         for item in items {
-            guard let entry = deleted[item.categoryRaw] else { continue }
-            item.categoryRaw = entry.replacementName ?? WishCategory.other.rawValue
-            hasChanges = true
+            var destination = item.categoryRaw
+            var visited = Set<String>()
+            while let entry = latest[destination], entry.isRemoved {
+                guard visited.insert(destination).inserted else {
+                    destination = uncategorized
+                    break
+                }
+                destination = entry.replacementName ?? uncategorized
+            }
+            if destination != item.categoryRaw {
+                item.categoryRaw = destination
+                hasChanges = true
+            }
         }
         if hasChanges { try context.save() }
     }

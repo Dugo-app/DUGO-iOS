@@ -5,26 +5,33 @@
 //  Created by 김승원 on 1/10/26.
 //
 
-import SwiftData
 import SwiftUI
 
 struct CategoryManagementView: View {
+    // MARK: - Types
+
+    private enum ManagementAlert: Identifiable {
+        case limitReached
+        case delete(String)
+
+        var id: String {
+            switch self {
+            case .limitReached: "limitReached"
+            case .delete(let category): "delete.\(category)"
+            }
+        }
+    }
+
     // MARK: - Properties
 
     @ObservedObject private var viewModel: HomeViewModel
-    @State private var newCategory = ""
+    @State private var isShowingAddSheet = false
     @State private var editingCategory: String?
-    @State private var editedCategory = ""
-    @State private var categoryToDelete: String?
-    @State private var validationMessage: String?
-    @State private var isShowingCategoryLimitAlert = false
+    @State private var editedName = ""
+    @State private var renameError: String?
+    @State private var managementAlert: ManagementAlert?
     @State private var editMode: EditMode = .inactive
-    @FocusState private var focusedField: Field?
-
-    private enum Field: Hashable {
-        case newCategory
-        case editedCategory
-    }
+    @FocusState private var focusedCategory: String?
 
     // MARK: - Initializer
 
@@ -36,26 +43,17 @@ struct CategoryManagementView: View {
 
     var body: some View {
         List {
-            addSection
-                .frame(maxWidth: 620)
-                .frame(maxWidth: .infinity)
-                .listRowInsets(
-                    EdgeInsets(top: 16, leading: 16, bottom: 12, trailing: 16)
-                )
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-
             categoryHeader
                 .frame(maxWidth: 620)
                 .frame(maxWidth: .infinity)
                 .listRowInsets(
-                    EdgeInsets(top: 12, leading: 16, bottom: 5, trailing: 16)
+                    EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16)
                 )
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
 
             ForEach(movableCategories, id: \.self) { category in
-                movableCategoryRow(category)
+                categoryRow(category)
                     .frame(maxWidth: 620)
                     .frame(maxWidth: .infinity)
                     .listRowInsets(
@@ -64,19 +62,20 @@ struct CategoryManagementView: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
             }
-            .onMove(perform: viewModel.moveCategory)
-
-            if let uncategorizedCategory {
-                categoryRow(uncategorizedCategory)
-                    .frame(maxWidth: 620)
-                    .frame(maxWidth: .infinity)
-                    .listRowInsets(
-                        EdgeInsets(top: 5, leading: 16, bottom: 40, trailing: 16)
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .moveDisabled(true)
+            .onMove { source, destination in
+                guard saveInlineCategory() else { return }
+                viewModel.moveCategory(fromOffsets: source, toOffset: destination)
             }
+
+            categoryRow(WishCategory.other.rawValue)
+                .frame(maxWidth: 620)
+                .frame(maxWidth: .infinity)
+                .listRowInsets(
+                    EdgeInsets(top: 5, leading: 16, bottom: 40, trailing: 16)
+                )
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .moveDisabled(true)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -88,81 +87,73 @@ struct CategoryManagementView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    toggleReordering()
+                    guard saveInlineCategory() else { return }
+                    if viewModel.categories.count >= 10 {
+                        managementAlert = .limitReached
+                    } else {
+                        isShowingAddSheet = true
+                    }
                 } label: {
-                    Image(systemName: editMode.isEditing ? "checkmark" : "arrow.up.arrow.down")
+                    Image(systemName: "plus")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(DuGoTheme.ink)
                         .frame(width: 24, height: 24)
-                        .contentTransition(.identity)
-                        .animation(nil, value: editMode.isEditing)
                 }
                 .tint(DuGoTheme.ink)
-                .accessibilityLabel(editMode.isEditing ? "순서 변경 완료" : "카테고리 순서 변경")
             }
         }
-        .scrollDismissesKeyboard(.interactively)
-        .dismissKeyboardOnBackgroundTap()
         .dugoScreen()
         .dugoErrorToast(message: $viewModel.errorMessage)
-        .dugoConfirmationAlert(
-            title: "카테고리를 삭제할까요?",
-            message: "이 카테고리에 담긴 상품은 모두 미분류로 이동해요 삭제한 카테고리는 되돌릴 수 없어요",
-            confirmTitle: "삭제",
-            isPresented: deleteAlertBinding
-        ) {
-            deleteSelectedCategory()
+        .scrollDismissesKeyboard(.interactively)
+        .dismissKeyboardOnBackgroundTap()
+        .onAppear { viewModel.reload() }
+        .onDisappear { saveInlineCategory() }
+        .onChange(of: focusedCategory) { previous, current in
+            guard let previous, previous != current else { return }
+            saveInlineCategory(expected: previous)
+        }
+        .sheet(isPresented: $isShowingAddSheet) {
+            CategoryEditorSheet(viewModel: viewModel)
+        }
+        .alert(item: $managementAlert) { alert in
+            switch alert {
+            case .limitReached:
+                Alert(
+                    title: Text("카테고리는 최대 10개까지 만들 수 있어요"),
+                    dismissButton: .cancel(Text("확인"))
+                )
+            case .delete(let category):
+                Alert(
+                    title: Text("카테고리를 삭제할까요?"),
+                    message: Text("이 카테고리에 담긴 상품은 모두 미분류로 이동해요"),
+                    primaryButton: .cancel(Text("취소")),
+                    secondaryButton: .destructive(Text("삭제")) {
+                        deleteCategory(category)
+                    }
+                )
+            }
         }
     }
 
     // MARK: - Subviews
 
-    private var addSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("새 카테고리")
-
-            HStack(spacing: 10) {
-                TextField("카테고리 이름", text: $newCategory)
-                    .font(DuGoFont.body16Regular.font)
-                    .foregroundStyle(DuGoTheme.ink)
-                    .textInputAutocapitalization(.never)
-                    .submitLabel(.done)
-                    .focused($focusedField, equals: .newCategory)
-                    .onSubmit(addCategory)
-                    .onChange(of: newCategory) { _, value in
-                        limitLength(of: &newCategory, value: value)
-                        validationMessage = nil
-                    }
-
-                Text("\(newCategory.count)/5")
-                    .applyDuGoFont(.caption12Regular)
-                    .foregroundStyle(DuGoTheme.secondary)
-            }
-            .frame(minHeight: 58)
-            .padding(.horizontal, 14)
-            .dugoRoundedSurface()
-
-            if let validationMessage {
-                Text(validationMessage)
-                    .applyDuGoFont(.caption12Regular)
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 4)
-            }
-        }
-        .alert("카테고리는 최대 10개까지 만들 수 있어요", isPresented: $isShowingCategoryLimitAlert) {
-            Button("확인", role: .cancel) {}
-        }
-    }
-
     private var categoryHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            sectionTitle("카테고리")
+        HStack {
+            Text("카테고리 \(viewModel.categories.count)개")
+                .applyDuGoFont(.body14Regular)
+                .foregroundStyle(DuGoTheme.secondary)
 
             Spacer()
 
-            Text("\(viewModel.categories.count)개")
-                .applyDuGoFont(.caption12Regular)
-                .foregroundStyle(DuGoTheme.secondary)
+            Button(editMode.isEditing ? "완료" : "수정") {
+                toggleEditing()
+            }
+            .applyDuGoFont(.button14Medium)
+            .foregroundStyle(DuGoTheme.accent)
+            .buttonStyle(.plain)
+            .padding(.vertical, 8)
+            .contentTransition(.identity)
+            .animation(nil, value: editMode.isEditing)
         }
     }
 
@@ -170,165 +161,125 @@ struct CategoryManagementView: View {
         viewModel.categories.filter { $0 != WishCategory.other.rawValue }
     }
 
-    private var uncategorizedCategory: String? {
-        viewModel.categories.first { $0 == WishCategory.other.rawValue }
-    }
-
-    @ViewBuilder
-    private func movableCategoryRow(_ category: String) -> some View {
-        if editMode.isEditing {
-            categoryRow(category)
-        } else {
-            categoryRow(category)
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        categoryToDelete = category
-                    } label: {
-                        Label("삭제", systemImage: "trash")
-                    }
-
-                    Button {
-                        beginEditing(category)
-                    } label: {
-                        Label("수정", systemImage: "pencil")
-                    }
-                    .tint(DuGoTheme.secondary)
-                }
-        }
-    }
-
-    @ViewBuilder
     private func categoryRow(_ category: String) -> some View {
         let isProtected = category == WishCategory.other.rawValue
+        let isRenaming = editingCategory == category
+        let count = viewModel.keptItems.filter { $0.categoryRaw == category }.count
 
-        HStack(spacing: 12) {
-            if editingCategory == category {
-                TextField("카테고리 이름", text: $editedCategory)
-                    .font(DuGoFont.body16Medium.font)
-                    .foregroundStyle(DuGoTheme.ink)
-                    .submitLabel(.done)
-                    .focused($focusedField, equals: .editedCategory)
-                    .onSubmit { saveEditedCategory(category) }
-                    .onChange(of: editedCategory) { _, value in
-                        limitLength(of: &editedCategory, value: value)
-                        validationMessage = nil
-                    }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                if isRenaming {
+                    TextField("카테고리 이름", text: $editedName)
+                        .applyDuGoFont(.body16Medium)
+                        .foregroundStyle(DuGoTheme.ink)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .focused($focusedCategory, equals: category)
+                        .onSubmit { saveInlineCategory(expected: category) }
+                        .onChange(of: editedName) { _, value in
+                            if value.count > 5 {
+                                editedName = String(value.prefix(5))
+                            }
+                            renameError = nil
+                        }
 
-                Button("취소") {
-                    cancelEditing()
-                }
-                .applyDuGoFont(.button14Medium)
-                .foregroundStyle(DuGoTheme.secondary)
-
-                Button("저장") {
-                    saveEditedCategory(category)
-                }
-                .applyDuGoFont(.button14Medium)
-                .foregroundStyle(DuGoTheme.accent)
-                .disabled(editedCategory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            } else {
-                Text(category)
-                    .applyDuGoFont(.body16Medium)
-                    .foregroundStyle(DuGoTheme.ink)
-
-                Spacer()
-
-                if isProtected {
-                    Text("기본")
+                    Text("\(editedName.count)/5")
                         .applyDuGoFont(.caption12Regular)
                         .foregroundStyle(DuGoTheme.secondary)
+                } else {
+                    Text(category)
+                        .applyDuGoFont(.body16Medium)
+                        .foregroundStyle(DuGoTheme.ink)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 8)
+
+                    if editMode.isEditing && !isProtected {
+                        Button {
+                            beginRenaming(category)
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(DuGoTheme.ink)
+                                .frame(width: 36, height: 40)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            guard saveInlineCategory() else { return }
+                            managementAlert = .delete(category)
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(.red)
+                                .frame(width: 36, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("\(count)개")
+                            .applyDuGoFont(.caption12Regular)
+                            .foregroundStyle(DuGoTheme.secondary)
+
+                    }
                 }
+            }
+
+            if isRenaming, let renameError {
+                Text(renameError)
+                    .applyDuGoFont(.caption12Regular)
+                    .foregroundStyle(.red)
             }
         }
         .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .frame(minHeight: 58)
         .dugoRoundedSurface()
     }
 
-    private func sectionTitle(_ title: String) -> some View {
-        Text(title)
-            .applyDuGoFont(.body14Regular)
-            .foregroundStyle(DuGoTheme.secondary)
-    }
-
-    private var deleteAlertBinding: Binding<Bool> {
-        Binding(
-            get: { categoryToDelete != nil },
-            set: { isPresented in
-                if !isPresented {
-                    categoryToDelete = nil
-                }
-            }
-        )
-    }
-
     // MARK: - Methods
 
-    private func addCategory() {
-        do {
-            try viewModel.addCategory(newCategory)
-            newCategory = ""
-            focusedField = nil
-            validationMessage = nil
-        } catch WishCategoryManagementError.limitReached {
-            isShowingCategoryLimitAlert = true
-            validationMessage = nil
-        } catch {
-            validationMessage = error.localizedDescription
+    private func toggleEditing() {
+        guard saveInlineCategory() else { return }
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            editMode = editMode.isEditing ? .inactive : .active
         }
     }
 
-    private func beginEditing(_ category: String) {
+    private func beginRenaming(_ category: String) {
+        guard saveInlineCategory() else { return }
         editingCategory = category
-        editedCategory = category
-        validationMessage = nil
-        focusedField = .editedCategory
+        editedName = category
+        renameError = nil
+        focusedCategory = category
     }
 
-    private func cancelEditing() {
-        editingCategory = nil
-        validationMessage = nil
-        focusedField = nil
-        DispatchQueue.main.async {
-            editedCategory = ""
-        }
-    }
-
-    private func saveEditedCategory(_ category: String) {
-        guard editingCategory == category else { return }
+    @discardableResult
+    private func saveInlineCategory(expected category: String? = nil) -> Bool {
+        guard let original = editingCategory else { return true }
+        guard category == nil || category == original else { return true }
 
         do {
-            try viewModel.renameCategory(category, to: editedCategory)
-            cancelEditing()
+            try viewModel.renameCategory(original, to: editedName)
+            editingCategory = nil
+            renameError = nil
+            if focusedCategory == original {
+                focusedCategory = nil
+            }
+            return true
         } catch {
-            validationMessage = error.localizedDescription
+            renameError = error.localizedDescription
+            return false
         }
     }
 
-    private func deleteSelectedCategory() {
-        guard let categoryToDelete else { return }
+    private func deleteCategory(_ category: String) {
         do {
-            try viewModel.deleteCategory(categoryToDelete)
-            self.categoryToDelete = nil
-            validationMessage = nil
+            try viewModel.deleteCategory(category)
         } catch {
-            self.categoryToDelete = nil
-            validationMessage = error.localizedDescription
-        }
-    }
-
-    private func toggleReordering() {
-        if editMode.isEditing {
-            editMode = .inactive
-        } else {
-            cancelEditing()
-            editMode = .active
-        }
-    }
-
-    private func limitLength(of text: inout String, value: String) {
-        if value.count > 5 {
-            text = String(value.prefix(5))
+            viewModel.errorMessage = error.localizedDescription
         }
     }
 }
